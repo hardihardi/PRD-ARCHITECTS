@@ -1,0 +1,689 @@
+import React, { useState, useEffect } from "react";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
+import { db } from "../lib/firebase";
+import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  ArrowLeft,
+  Sparkles,
+  Save,
+  Plus,
+  Trash2,
+  FileCode,
+  LayoutTemplate,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  HelpCircle,
+  Clock,
+  Layers,
+  ChevronDown,
+  ChevronUp
+} from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+
+interface CustomSection {
+  title: string;
+  content: string;
+}
+
+export function CustomTemplate() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  const editorRef = React.useRef<HTMLDivElement>(null);
+
+  // Main Form States
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("SaaS");
+  const [projectType, setProjectType] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [complexity, setComplexity] = useState("Sedang");
+  const [timeEstimation, setTimeEstimation] = useState("4-6 Minggu");
+  const [audience, setAudience] = useState("");
+  const [techStack, setTechStack] = useState("");
+  
+  // Lists
+  const [features, setFeatures] = useState<string[]>([]);
+  const [newFeature, setNewFeature] = useState("");
+  const [customSections, setCustomSections] = useState<CustomSection[]>([
+    {
+      title: "",
+      content: ""
+    }
+  ]);
+
+  // UI States
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
+
+  // Load existing template if editing
+  useEffect(() => {
+    if (!editId) return;
+
+    const loadTemplate = async () => {
+      try {
+        const docRef = doc(db, "templates", editId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setName(data.name || "");
+          setDescription(data.description || "");
+          setCategory(data.category || "Community");
+          setComplexity(data.complexity || "Sedang");
+          setTimeEstimation(data.timeEstimation || "");
+          setAudience(data.audience || "");
+          setTechStack(data.techStack || "");
+          if (Array.isArray(data.features)) {
+            setFeatures(data.features);
+          } else if (typeof data.features === "string") {
+            setFeatures(data.features.split("\n").filter(Boolean));
+          }
+          if (Array.isArray(data.customSections)) {
+            setCustomSections(data.customSections);
+          }
+        } else {
+          setError("Template tidak ditemukan.");
+        }
+      } catch (err: any) {
+        console.error("Gagal memuat template kustom:", err);
+        setError("Gagal memuat detail template untuk diedit.");
+      }
+    };
+
+    loadTemplate();
+  }, [editId]);
+
+  // AI Suggestions function
+  const handleGenerateAISuggestions = async () => {
+    if (!projectType || !industry) {
+      setError("Silakan masukkan Tipe Proyek dan Industri untuk memicu saran AI.");
+      return;
+    }
+
+    setIsAiLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch("/api/v1/suggest-custom-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectType,
+          industry,
+          description: description || "Proyek kustom"
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal memperoleh respon dari AI");
+      }
+
+      const data = await response.json();
+      
+      // Update fields
+      if (data.name) setName(data.name);
+      if (data.description) setDescription(data.description);
+      if (data.category) setCategory(data.category);
+      if (data.complexity) setComplexity(data.complexity);
+      if (data.timeEstimation) setTimeEstimation(data.timeEstimation);
+      if (data.audience) setAudience(data.audience);
+      if (data.techStack) setTechStack(data.techStack);
+      if (Array.isArray(data.features)) setFeatures(data.features);
+      if (Array.isArray(data.customSections)) {
+        setCustomSections(data.customSections);
+        setActiveSectionIdx(0);
+      }
+
+      setSuccess("Saran AI berhasil diterapkan! Anda dapat menyesuaikannya kembali.");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Gagal membuat template kustom lewat AI.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Features CRUD
+  const handleAddFeature = () => {
+    if (!newFeature.trim()) return;
+    setFeatures([...features, newFeature.trim()]);
+    setNewFeature("");
+  };
+
+  const handleRemoveFeature = (idx: number) => {
+    setFeatures(features.filter((_, i) => i !== idx));
+  };
+
+  // Sections CRUD
+  const handleAddSection = () => {
+    const newSec: CustomSection = {
+      title: `## Section Baru ${customSections.length + 1}`,
+      content: "Masukkan template konten section di sini..."
+    };
+    setCustomSections([...customSections, newSec]);
+    setActiveSectionIdx(customSections.length);
+  };
+
+  const handleRemoveSection = (idx: number) => {
+    if (customSections.length <= 1) {
+      setError("Template minimal harus memiliki satu section.");
+      return;
+    }
+    const filtered = customSections.filter((_, i) => i !== idx);
+    setCustomSections(filtered);
+    setActiveSectionIdx(Math.max(0, idx - 1));
+  };
+
+  const handleSectionChange = (idx: number, field: keyof CustomSection, val: string) => {
+    const updated = [...customSections];
+    updated[idx] = {
+      ...updated[idx],
+      [field]: val
+    };
+    setCustomSections(updated);
+  };
+
+  const moveSection = (idx: number, direction: "up" | "down") => {
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === customSections.length - 1) return;
+
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    const updated = [...customSections];
+    const temp = updated[idx];
+    updated[idx] = updated[targetIdx];
+    updated[targetIdx] = temp;
+
+    setCustomSections(updated);
+    setActiveSectionIdx(targetIdx);
+  };
+
+  const handleSectionSelect = (idx: number) => {
+    setActiveSectionIdx(idx);
+    if (window.innerWidth < 768) {
+      setTimeout(() => {
+        editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+  };
+
+  // Save/Submit Template
+  const handleSaveTemplate = async () => {
+    if (!name.trim()) {
+      setError("Nama Template wajib diisi.");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Deskripsi Template wajib diisi.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = {
+        name: name.trim(),
+        description: description.trim(),
+        category,
+        complexity,
+        timeEstimation,
+        audience,
+        techStack,
+        features,
+        customSections,
+        authorName: user?.email || "User Komunitas",
+        createdBy: user?.uid || "anonymous",
+        updatedAt: serverTimestamp(),
+      };
+
+      if (editId) {
+        // Edit existing doc
+        const docRef = doc(db, "templates", editId);
+        await updateDoc(docRef, payload);
+        setSuccess("Template kustom berhasil diperbarui!");
+      } else {
+        // Create new doc
+        const templatesRef = collection(db, "templates");
+        await addDoc(templatesRef, {
+          ...payload,
+          createdAt: serverTimestamp(),
+          rating: 5,
+          ratingCount: 1,
+          isFeatured: false,
+          isCommunity: true
+        });
+        setSuccess("Template kustom berhasil dibuat & disimpan ke katalog!");
+      }
+
+      setTimeout(() => {
+        navigate("/templates");
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setError("Gagal menyimpan template: " + (err.message || "Internal error"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="w-full space-y-8 pb-20">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+        <div>
+          <Link
+            to="/templates"
+            className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 mb-2"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Kembali ke Katalog
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
+            <LayoutTemplate className="h-8 w-8 text-indigo-600" />
+            {editId ? "Edit Template Kustom" : "Buat Template PRD Kustom AI"}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 max-w-2xl">
+            Rancang template PRD Anda sendiri. Gunakan AI untuk mendapatkan saran instan, atau buat secara manual sesuai kebutuhan tim dan industri Anda.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">{success}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Form Panel: Setup & AI suggestion */}
+        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-6 self-start">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
+              Saran AI Generator
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Tipe Proyek <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="Misal: Mobile App Delivery, AI Workspace"
+                  value={projectType}
+                  onChange={(e) => setProjectType(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Industri / Domain <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="Misal: Logistics, FinTech, EdTech"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                />
+              </div>
+
+              <Button
+                onClick={handleGenerateAISuggestions}
+                disabled={isAiLoading}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2"
+              >
+                {isAiLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Membuat Template...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Saran Template dengan AI
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Core Metadata */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+            <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
+              Metadata Template
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Nama Template <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="Nama Template PRD"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Deskripsi <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  placeholder="Deskripsi singkat template..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Kategori
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="SaaS">SaaS</option>
+                    <option value="Retail & E-Commerce">E-Commerce</option>
+                    <option value="Financial Services">FinTech</option>
+                    <option value="Healthcare & Medtech">Healthcare</option>
+                    <option value="EdTech & Education">EdTech</option>
+                    <option value="Logistics & Supply Chain">Logistics</option>
+                    <option value="On-Demand & Mobility">On-Demand</option>
+                    <option value="AI & Productivity">AI Tools</option>
+                    <option value="Community">Umum/Lainnya</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Kompleksitas
+                  </label>
+                  <select
+                    value={complexity}
+                    onChange={(e) => setComplexity(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="Rendah">Rendah</option>
+                    <option value="Sedang">Sedang</option>
+                    <option value="Tinggi">Tinggi</option>
+                    <option value="Sangat Tinggi">Sangat Tinggi</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Estimasi Waktu
+                  </label>
+                  <Input
+                    placeholder="Misal: 4-6 Minggu"
+                    value={timeEstimation}
+                    onChange={(e) => setTimeEstimation(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    Target Audiens
+                  </label>
+                  <Input
+                    placeholder="Misal: Driver / Pengguna"
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Rekomendasi Tech Stack
+                </label>
+                <Input
+                  placeholder="Misal: React, Node.js, PostgreSQL"
+                  value={techStack}
+                  onChange={(e) => setTechStack(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Content Editor Panel */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Features Checklist */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
+              Fitur Utama yang Direkomendasikan
+            </h2>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                placeholder="Tambahkan fitur utama baru..."
+                value={newFeature}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddFeature()}
+                className="flex-1"
+              />
+              <Button onClick={handleAddFeature} variant="outline" className="shrink-0 gap-1 sm:w-auto w-full justify-center">
+                <Plus className="w-4 h-4" /> Tambah
+              </Button>
+            </div>
+
+            <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              {features.length === 0 && (
+                <li className="text-sm text-gray-400 italic py-2">Belum ada fitur utama.</li>
+              )}
+              {features.map((feat, idx) => (
+                <li key={idx} className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 border border-gray-100 text-sm">
+                  <div className="flex items-center gap-2 text-gray-700 min-w-0 flex-1">
+                    <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <span className="truncate">{feat}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveFeature(idx)}
+                    className="text-gray-400 hover:text-red-500 p-1 rounded-md transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Section Blueprint Layout */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Blok Section Template
+                </h2>
+                <p className="text-xs text-gray-400">Rancang judul section dan placeholder isian markdown di bawah.</p>
+              </div>
+              <Button onClick={handleAddSection} size="sm" className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 gap-1.5 justify-center sm:w-auto w-full">
+                <Plus className="w-4 h-4" /> Tambah Section
+              </Button>
+            </div>
+
+            {/* Mobile Dropdown & Quick Control Bar (Visible only on mobile/tablet) */}
+            <div className="block md:hidden bg-gray-50 p-3 rounded-xl border border-gray-150 space-y-2">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Pilih Section yang Ingin Diedit
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={activeSectionIdx}
+                  onChange={(e) => handleSectionSelect(Number(e.target.value))}
+                  className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm outline-none bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                >
+                  {customSections.map((sec, idx) => (
+                    <option key={idx} value={idx}>
+                      {idx + 1}. {sec.title.replace(/^#+\s*/, "") || "Tanpa Judul"}
+                    </option>
+                  ))}
+                </select>
+                
+                {/* Mobile direct controls */}
+                <div className="flex items-center justify-center gap-1 border border-gray-200 rounded-lg p-1 bg-white shrink-0">
+                  <button
+                    onClick={() => moveSection(activeSectionIdx, "up")}
+                    disabled={activeSectionIdx === 0}
+                    className="p-1.5 text-gray-500 hover:text-indigo-600 disabled:opacity-30 transition-colors"
+                    title="Geser ke Atas"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => moveSection(activeSectionIdx, "down")}
+                    disabled={activeSectionIdx === customSections.length - 1}
+                    className="p-1.5 text-gray-500 hover:text-indigo-600 disabled:opacity-30 transition-colors"
+                    title="Geser ke Bawah"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleRemoveSection(activeSectionIdx)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Hapus Section"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Section List Left Sidebar (Visible only on desktop) */}
+              <div className="hidden md:block space-y-1 md:col-span-1 border-r border-gray-100 pr-4 max-h-[450px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
+                {customSections.map((sec, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between p-2.5 rounded-lg text-left text-sm transition-all relative group cursor-pointer ${
+                      activeSectionIdx === idx
+                        ? "bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold"
+                        : "text-gray-600 hover:bg-gray-50 border border-transparent"
+                    }`}
+                    onClick={() => handleSectionSelect(idx)}
+                  >
+                    <span className="truncate pr-16 md:pr-8 group-hover:pr-16 transition-all">{sec.title || "(Tanpa Judul)"}</span>
+                    
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-white md:bg-transparent rounded-md p-0.5 shadow-sm md:shadow-none border md:border-0 gap-0.5 z-10">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); moveSection(idx, "up"); }}
+                        disabled={idx === 0}
+                        className="text-gray-400 hover:text-indigo-600 p-1 rounded disabled:opacity-30 transition-colors"
+                        title="Geser ke Atas"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); moveSection(idx, "down"); }}
+                        disabled={idx === customSections.length - 1}
+                        className="text-gray-400 hover:text-indigo-600 p-1 rounded disabled:opacity-30 transition-colors"
+                        title="Geser ke Bawah"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveSection(idx); }}
+                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                        title="Hapus Section"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Active Section Content Editor */}
+              <div ref={editorRef} className="col-span-1 md:col-span-2 space-y-4 scroll-mt-6">
+                {customSections[activeSectionIdx] ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                      <span className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        Mengedit Section {activeSectionIdx + 1} dari {customSections.length}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Judul Section (Heading Markdown)
+                      </label>
+                      <Input
+                        value={customSections[activeSectionIdx].title}
+                        onChange={(e) => handleSectionChange(activeSectionIdx, "title", e.target.value)}
+                        placeholder="Misal: ## 1. Latar Belakang"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Placeholder / Panduan Isian (Rich Markdown)
+                      </label>
+                      <Textarea
+                        value={customSections[activeSectionIdx].content}
+                        onChange={(e) => handleSectionChange(activeSectionIdx, "content", e.target.value)}
+                        placeholder="Uraikan format atau panduan isian untuk bagian ini..."
+                        className="min-h-[220px] md:min-h-[280px] font-mono text-sm leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full min-h-[150px] flex items-center justify-center text-gray-400 italic border border-dashed border-gray-200 rounded-xl">
+                    Pilih section dari panel kiri atau klik "+ Tambah Section" untuk mendesain template.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Footer */}
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 sm:space-y-0 space-y-2">
+            <Link to="/templates" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full justify-center">Batal</Button>
+            </Link>
+            <Button
+              onClick={handleSaveTemplate}
+              disabled={isSaving}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-6 w-full sm:w-auto justify-center"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {editId ? "Perbarui Template" : "Simpan & Daftarkan Template"}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

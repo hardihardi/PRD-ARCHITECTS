@@ -1,0 +1,6 @@
+{
+  "name": "PRD Architect",
+  "description": "An AI-powered Product Requirements Document generator with voice input and Firebase integration.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

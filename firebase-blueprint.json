@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "Prd": {
+      "title": "PRD Document",
+      "type": "object",
+      "properties": {
+        "projectName": { "type": "string" },
+        "projectType": { "type": "string" },
+        "framework": { "type": "string" },
+        "database": { "type": "string" },
+        "description": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "PrdComment": {
+      "title": "PRD Comment",
+      "type": "object"
+    },
+    "PrdVersion": {
+      "title": "PRD Version",
+      "type": "object"
+    },
+    "PrdPresence": {
+      "title": "PRD Presence",
+      "type": "object"
+    },
+    "PrdFeedback": {
+      "title": "PRD Feedback",
+      "type": "object"
+    },
+    "PrdSection": {
+      "title": "PRD Section",
+      "type": "object"
+    },
+    "GlobalFeedback": {
+      "title": "Global Feedback",
+      "type": "object"
+    },
+    "Log": {
+      "title": "Log",
+      "type": "object"
+    },
+    "AppUser": {
+      "title": "App User",
+      "type": "object"
+    },
+    "MarketplaceTemplate": {
+      "title": "Marketplace Template",
+      "type": "object"
+    },
+    "TemplateReview": {
+      "title": "Template Review",
+      "type": "object"
+    }
+  },
+  "firestore": {
+    "/prds/{prdId}": { "schema": "Prd", "description": "PRD documents" },
+    "/prds/{prdId}/comments/{commentId}": { "schema": "PrdComment", "description": "PRD comments" },
+    "/prds/{prdId}/versions/{versionId}": { "schema": "PrdVersion", "description": "PRD versions" },
+    "/prds/{prdId}/presence/{presenceId}": { "schema": "PrdPresence", "description": "PRD presence" },
+    "/prds/{prdId}/feedback/{feedbackId}": { "schema": "PrdFeedback", "description": "PRD feedback" },
+    "/prds/{prdId}/sections/{sectionId}": { "schema": "PrdSection", "description": "PRD sections" },
+    "/global_feedback/{feedbackId}": { "schema": "GlobalFeedback", "description": "Global Feedback" },
+    "/logs/{logId}": { "schema": "Log", "description": "Logs" },
+    "/app_users/{userId}": { "schema": "AppUser", "description": "App Users" },
+    "/templates/{templateId}": { "schema": "MarketplaceTemplate", "description": "Marketplace Templates" },
+    "/templates/{templateId}/reviews/{reviewId}": { "schema": "TemplateReview", "description": "Template reviews" }
+  }
+}
