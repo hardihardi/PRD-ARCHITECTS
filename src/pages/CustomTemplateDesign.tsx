@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { loadStoredApiKeysSync } from "../lib/apiKeyStorage";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -159,13 +160,19 @@ export function CustomTemplateDesign() {
     setError("");
     setSuccess("");
     try {
+      const storedKeys = loadStoredApiKeysSync();
+      const activeApiKey = storedKeys.Gemini?.main || storedKeys.Claude?.main || storedKeys.Chatgpt?.main || "";
+      const activeProvider = storedKeys.Gemini?.main ? "Gemini" : storedKeys.Claude?.main ? "Claude" : storedKeys.Chatgpt?.main ? "Chatgpt" : "Gemini";
+
       const response = await fetch("/api/v1/suggest-custom-design-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectType,
           industry,
-          description: description || "Desain visual modern responsif"
+          description: description || "Desain visual modern responsif",
+          apiKey: activeApiKey,
+          provider: activeProvider,
         })
       });
 

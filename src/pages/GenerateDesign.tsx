@@ -971,24 +971,24 @@ Desain Aplikasi: ${prompt}
                       }}
                       className="w-full appearance-none px-3.5 py-2.5 bg-white border border-indigo-200 text-indigo-950 rounded-xl text-xs font-semibold shadow-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer pr-10 hover:border-indigo-300 transition-all"
                     >
-                      <option value="">🎯 Quick Select Preset...</option>
-                      <optgroup label="✨ Preset Bawaan">
-                        <option value="neobrutalist">⚡ Neo-Brutalist Dashboard</option>
-                        <option value="minimaldark">🌙 Minimalist Dark Mode</option>
-                        <option value="warmeditorial">🌸 Warm Editorial</option>
-                        <option value="cleantech">🛡️ Clean Tech Developer</option>
-                        <option value="glassfintech">🔮 Glassmorphism Fintech</option>
-                        <option value="corporate">💼 Corporate Trust Enterprise</option>
-                        <option value="playful">🎈 Playful Learning</option>
-                        <option value="cyberpunk">👾 Geometric Cyberpunk</option>
-                        <option value="wellness">🍃 Organic Wellness</option>
-                        <option value="aicopilot">🤖 Sleek AI Copilot</option>
+                      <option value="">Pilih Preset Desain...</option>
+                      <optgroup label="Preset Bawaan">
+                        <option value="neobrutalist">Neo-Brutalist Dashboard</option>
+                        <option value="minimaldark">Minimalist Dark Mode</option>
+                        <option value="warmeditorial">Warm Editorial</option>
+                        <option value="cleantech">Clean Tech Developer</option>
+                        <option value="glassfintech">Glassmorphism Fintech</option>
+                        <option value="corporate">Corporate Trust Enterprise</option>
+                        <option value="playful">Playful Learning</option>
+                        <option value="cyberpunk">Geometric Cyberpunk</option>
+                        <option value="wellness">Organic Wellness</option>
+                        <option value="aicopilot">Sleek AI Copilot</option>
                       </optgroup>
                       {communityDesignTemplates.length > 0 && (
-                        <optgroup label="👥 Preset Komunitas">
+                        <optgroup label="Preset Komunitas">
                           {communityDesignTemplates.map(t => (
                             <option key={t.id} value={t.id}>
-                              👥 {t.name || "Preset Komunitas"}
+                              {t.name || "Preset Komunitas"}
                             </option>
                           ))}
                         </optgroup>

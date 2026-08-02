@@ -252,9 +252,45 @@ async function callChatGPT(apiKeyRaw: string, model: string, prompt: string): Pr
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`OpenAI API Error: ${res.status} - ${text}`);
-  }
+}
   const json = await res.json();
   return json.choices?.[0]?.message?.content || "";
+}
+
+async function executeAIWithCustomKey({
+  apiKey,
+  provider,
+  aiModel,
+  prompt,
+  preferredModel = "gemini-2.5-flash",
+}: {
+  apiKey?: string;
+  provider?: string;
+  aiModel?: string;
+  prompt: string;
+  preferredModel?: string;
+}): Promise<string> {
+  const modelToUse = aiModel || preferredModel;
+  let markdown = "";
+
+  try {
+    if (provider === "Chatgpt" && apiKey?.trim()) {
+      markdown = await callChatGPT(apiKey, modelToUse, prompt);
+    } else if (provider === "Claude" && apiKey?.trim()) {
+      markdown = await callClaude(apiKey, modelToUse, prompt);
+    } else {
+      const parsedKey = parseApiKey(apiKey || "").key;
+      const dynamicAi = parsedKey ? new GoogleGenAI({ apiKey: parsedKey }) : getAIClient();
+      const response = await generateContentWithFallback(dynamicAi, modelToUse, prompt);
+      markdown = response?.text || "";
+    }
+  } catch (externalError: any) {
+    console.log(`[AI Call Warning] Custom provider call failed (${externalError?.message || externalError}). Attempting server fallback...`);
+    const fallbackResponse = await generateContentWithFallback(getAIClient(), preferredModel, prompt);
+    markdown = fallbackResponse?.text || "";
+  }
+
+  return markdown;
 }
 
 async function startServer() {
@@ -823,7 +859,7 @@ Table checklist covering Visual Quality, Interaction & Cursor, Light/Dark Contra
 
   app.post("/api/v1/suggest-stack", async (req, res) => {
     try {
-      const { industry, projectDescription } = req.body;
+      const { industry, projectDescription, apiKey, provider, aiModel } = req.body;
       const prompt = `Based on the following project information, suggest the most suitable Project Type, Backend Framework, and Database. Return the result strictly as a valid JSON object with the keys: "projectType", "framework", and "database". Do not include any markdown formatting, code blocks, or additional text.
 
 Industry: ${industry || "Unknown"}
@@ -833,9 +869,14 @@ Allowed Project Types: "SaaS Application", "E-commerce Platform", "Social Networ
 Allowed Frameworks: "node-express", "go-gin", "python-fastapi", "Laravel", "Codeigniter", "spring-boot", "dotnet".
 Allowed Databases: "postgresql", "mysql", "mongodb", "sqlite".`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const suggestions = JSON.parse(cleanedText);
       res.json(suggestions);
@@ -848,7 +889,7 @@ Allowed Databases: "postgresql", "mysql", "mongodb", "sqlite".`;
 
   app.post("/api/v1/draft-problem-statement", async (req, res) => {
     try {
-      const { industry, projectDescription, projectType, framework, database } = req.body;
+      const { industry, projectDescription, projectType, framework, database, apiKey, provider, aiModel } = req.body;
       const prompt = `You are an elite product architect. Your task is to draft a comprehensive and deeply analytical Problem Statement for this specific project.
 Understand the target audience, the industry, and the exact user roles involved to identify the true, deep pain points.
 Provide highly relevant, context-aware outputs that feel like a professional product management document.
@@ -868,9 +909,14 @@ Tech Stack: ${framework || "Unknown"} / ${database || "Unknown"}
 
 Return the result strictly as a valid JSON object with the keys: "existingProblem", "painPoints", and "expectedOutcome". Do not include any markdown formatting, code blocks, or additional text.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const drafted = JSON.parse(cleanedText);
       res.json(drafted);
@@ -883,7 +929,7 @@ Return the result strictly as a valid JSON object with the keys: "existingProble
 
   app.post("/api/v1/suggest-template-content", async (req, res) => {
     try {
-      const { projectType, industry, templateName, projectDescription } = req.body;
+      const { projectType, industry, templateName, projectDescription, apiKey, provider, aiModel } = req.body;
       const prompt = `You are an expert Product Manager and AI System Architect.
 Based on the selected PRD template "${templateName || "Custom Template"}", of type "${projectType || "General"}" in the "${industry || "Technology"}" industry, and optionally with description: "${projectDescription || ""}", suggest highly tailored, deep, and relevant content for the following four key PRD sections:
 1. "vision": A clear, inspirational, and high-impact Vision statement of what this product aims to achieve in the next 1-3 years.
@@ -901,9 +947,14 @@ Return the result strictly as a valid JSON object with the keys: "vision", "goal
 
 Do not include any markdown formatting, code blocks (such as \`\`\`json), or additional conversational text. Respond ONLY with the raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const suggestions = JSON.parse(cleanedText);
       res.json(suggestions);
@@ -916,7 +967,7 @@ Do not include any markdown formatting, code blocks (such as \`\`\`json), or add
 
   app.post("/api/v1/chat", async (req, res) => {
     try {
-      const { messages } = req.body;
+      const { messages, apiKey, provider, aiModel } = req.body;
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ error: "Invalid messages format" });
       }
@@ -926,8 +977,6 @@ You assist users in writing User Stories, Acceptance Criteria, framing problems,
 You should leverage your knowledge to give context-aware responses about PRD generation. 
 Be concise, helpful, and professional. Use markdown for better formatting.`;
 
-      // Format history for the API
-      // Since it's a simple chat, we can just construct a flowing prompt with history
       const formattedHistory = messages
         .map(
           (m: any) =>
@@ -937,9 +986,15 @@ Be concise, helpful, and professional. Use markdown for better formatting.`;
 
       const fullPrompt = `${systemPrompt}\n\nChat History:\n${formattedHistory}\n\nAssistant:`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", fullPrompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt: fullPrompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      res.json({ status: "success", text: response?.text || "Sorry, I couldn't generate a response." });
+      res.json({ status: "success", text: text || "Sorry, I couldn't generate a response." });
     } catch (e: any) {
       console.log("Chat endpoint error:", e?.message || e);
       const formatted = formatAIError(e);
@@ -949,7 +1004,7 @@ Be concise, helpful, and professional. Use markdown for better formatting.`;
 
   app.post("/api/v1/copilot/suggest", async (req, res) => {
     try {
-      const { step, formData } = req.body;
+      const { step, formData, apiKey, provider, aiModel } = req.body;
       const stepNum = parseInt(step) || 1;
 
       let stepDescription = "";
@@ -986,9 +1041,14 @@ Requirements for Suggestions:
    - "explanation": A brief, high-impact 1-2 sentence explanation of why this suggestion is suitable and what benefits it brings.
 3. Return the result strictly as a valid JSON array of 3 objects. Do not wrap in markdown \`\`\`json blocks. Do not add text before or after the JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "[]";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const suggestions = JSON.parse(cleanedText);
       res.json({ suggestions });
@@ -1001,7 +1061,7 @@ Requirements for Suggestions:
 
   app.post("/api/v1/copilot/refine", async (req, res) => {
     try {
-      const { text, tone } = req.body;
+      const { text, tone, apiKey, provider, aiModel } = req.body;
       if (!text) {
         return res.status(400).json({ error: "No text provided to refine" });
       }
@@ -1015,9 +1075,15 @@ Draft Text:
 
 Refined Text:`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const resultText = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      res.json({ status: "success", text: response?.text?.trim() || text });
+      res.json({ status: "success", text: resultText?.trim() || text });
     } catch (e: any) {
       console.log("Copilot refine error:", e.message);
       const formatted = formatAIError(e);
@@ -1027,7 +1093,7 @@ Refined Text:`;
 
   app.post("/api/v1/suggest-custom-template", async (req, res) => {
     try {
-      const { projectType, industry, description } = req.body;
+      const { projectType, industry, description, apiKey, provider, aiModel } = req.body;
       const prompt = `You are an elite Product Management AI consultant.
 Your job is to design a highly professional, comprehensive custom PRD template for a project of type "${projectType || "General"}" in the industry "${industry || "Technology"}", with the following description/context: "${description || "None provided"}".
 
@@ -1048,9 +1114,14 @@ Required JSON Keys:
 
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const suggestions = JSON.parse(cleanedText);
       res.json(suggestions);
@@ -1063,7 +1134,7 @@ Respond ONLY with raw JSON.`;
 
   app.post("/api/v1/suggest-custom-design-template", async (req, res) => {
     try {
-      const { projectType, industry, description } = req.body;
+      const { projectType, industry, description, apiKey, provider, aiModel } = req.body;
       const prompt = `You are an elite UI/UX Principal Designer and Design System Architect.
 Your job is to design a highly professional, comprehensive custom Design System & UI Kit blueprint for a project of type "${projectType || "General"}" in the industry "${industry || "Technology"}", with context: "${description || "None provided"}".
 
@@ -1089,9 +1160,14 @@ Required JSON Keys:
 
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-3.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const suggestions = JSON.parse(cleanedText);
       res.json(suggestions);
@@ -1104,7 +1180,7 @@ Respond ONLY with raw JSON.`;
 
   app.post("/api/v1/analyze-prd", async (req, res) => {
     try {
-      const { projectName, projectType, industry, framework, database, sections } = req.body;
+      const { projectName, projectType, industry, framework, database, sections, apiKey, provider, aiModel } = req.body;
       
       const prdContent = Array.isArray(sections) 
         ? sections.map((s: any) => `### ${s.title || s.order || "Section"}\n${s.content || ""}`).join("\n\n")
@@ -1143,9 +1219,14 @@ Required JSON keys:
 
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-2.5-flash", prompt);
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const analysis = JSON.parse(cleanedText);
       res.json(analysis);
@@ -1299,7 +1380,7 @@ Respond ONLY with raw JSON.`;
   // 1. EXTRACT STYLEGUIDE ENDPOINT
   app.post("/api/v1/extract-styleguide", async (req, res) => {
     try {
-      const { url } = req.body;
+      const { url, apiKey, provider, aiModel } = req.body;
       if (!url) {
         return res.status(400).json({ error: "URL is required" });
       }
@@ -1397,8 +1478,14 @@ Required JSON Structure:
 
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-2.5-flash", prompt);
-      const text = response?.text || "{}";
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
+
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const styleguideResult = JSON.parse(cleanedText);
       res.json(styleguideResult);
@@ -1412,7 +1499,7 @@ Respond ONLY with raw JSON.`;
   // 2. SCRAPE IMAGES ENDPOINT
   app.post("/api/v1/scrape-images", async (req, res) => {
     try {
-      const { url } = req.body;
+      const { url, apiKey, provider, aiModel } = req.body;
       if (!url) {
         return res.status(400).json({ error: "URL is required" });
       }
@@ -1455,8 +1542,14 @@ Required JSON Structure:
 Provide at least 8-12 diverse image assets covering: "Logo", "Hero Banner", "Icon", "Content Image", "Background", "Favicon".
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-2.5-flash", prompt);
-      const text = response?.text || "{}";
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
+
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const imagesResult = JSON.parse(cleanedText);
       res.json(imagesResult);
@@ -1470,7 +1563,7 @@ Respond ONLY with raw JSON.`;
   // 3. CRAWL WEBSITE ENDPOINT
   app.post("/api/v1/crawl-website", async (req, res) => {
     try {
-      const { url } = req.body;
+      const { url, apiKey, provider, aiModel } = req.body;
       if (!url) {
         return res.status(400).json({ error: "URL is required" });
       }
@@ -1597,8 +1690,14 @@ Required JSON Structure:
 
 Respond ONLY with raw JSON.`;
 
-      const response = await generateContentWithFallback(getAIClient(), "gemini-2.5-flash", prompt);
-      const text = response?.text || "{}";
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
+
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const crawlResult = JSON.parse(cleanedText);
       res.json(crawlResult);
@@ -1612,14 +1711,14 @@ Respond ONLY with raw JSON.`;
   // AI DOCUMENT ANALYZER ENDPOINT
   app.post("/api/v1/analyze-document", async (req, res) => {
     try {
-      const { documentText, fileName, apiKey } = req.body;
+      const { documentText, fileName, apiKey, provider, aiModel } = req.body;
 
       if (!documentText || typeof documentText !== "string" || documentText.trim().length === 0) {
         return res.status(400).json({ error: "Teks dokumen tidak boleh kosong." });
       }
 
       const prompt = `Anda adalah Senior Product Architect & AI Document Analysis Specialist.
-Tugas Anda adalah menganalisis dokumen referensi / spesifikasi kebutuhan produk berikut (Nama file: ${fileName || "Spesifikasi-Dokumen.txt"}) dan mengekstrak struktur PRD secara presisi.
+Tugas Anda adalah menganalisis dokumen referensi / spesifikasi kebutuhan produk berikut (Nama file: ${fileName || "Spesifikasi-Dokumen.txt"}) dan mengekstrak struktur PRD secara presisi, lengkap, dan siap digunakan langsung dalam Form Wizard PRD.
 
 Isi Dokumen yang Dianalisis:
 """
@@ -1667,18 +1766,47 @@ Tolong hasilkan respons JSON murni dengan skema persis sebagai berikut:
     "Kata Kunci 1", "Kata Kunci 2", "Teknologi 1", "Domain Term 1", "Metrik 1"
   ],
   "suggestedTechStack": {
-    "framework": "node-express | python-fastapi | go-gin | spring-boot | Laravel",
-    "database": "postgresql | mongodb | mysql | sqlite",
-    "apiStyle": "rest | graphql | grpc",
+    "framework": "React / Node.js | React / Express | Python / FastAPI | Go / Gin | Spring Boot | Flutter",
+    "database": "PostgreSQL | MongoDB | MySQL | Firebase Firestore",
+    "apiStyle": "REST | GraphQL | gRPC",
+    "authMethod": "JWT & OAuth Google | SSO (SAML) | MFA | OTP SMS",
+    "deploymentEnv": "AWS | Google Cloud Platform | Vercel | Cloud Run",
     "rationale": "Alasan pemilihan tech stack berdasarkan isi spesifikasi dokumen"
   },
   "enrichmentPayload": {
     "projectName": "Nama proyek yang dapat langsung digunakan di form PRD",
-    "projectType": "Tipe proyek yang sesuai",
-    "industry": "Industri terkait",
-    "problemStatement": "Pernyataan masalah lengkap",
-    "goals": "Daftar tujuan proyek dalam poin-poin",
-    "techStack": ["Teknologi 1", "Teknologi 2"],
+    "projectDescription": "Deskripsi menyeluruh produk (3-5 kalimat)",
+    "projectType": "SaaS Application | Mobile App | Internal Tool | AI Tool | dll",
+    "industry": "Fintech | Healthcare | E-commerce | dll",
+    "targetUser": "Target pengguna dan persona utama",
+    "existingProblem": "Penjelasan mendalam mengenai masalah eksisting saat ini",
+    "painPoints": "Daftar poin penderitaan/kendala utama pengguna (pisahkan dengan newline)",
+    "expectedOutcome": "Hasil dan dampak yang diharapkan dari solusi ini",
+    "framework": "Opsi framework terbaik",
+    "database": "Opsi database terbaik",
+    "apiStyle": "Opsi gaya API (REST / GraphQL / gRPC)",
+    "authMethod": "Metode autentikasi yang direkomendasikan",
+    "deploymentEnv": "Lingkungan deployment (AWS / GCP / Vercel)",
+    "budget": "Estimasi alokasi anggaran (contoh: $20,000 - $40,000)",
+    "teamSize": "Estimasi jumlah dan komposisi tim (contoh: 4-6 Orang)",
+    "performanceReqs": "Persyaratan performa dan waktu tanggap (SLA)",
+    "scalability": "Target skalabilitas dan beban sistem",
+    "latency": "Target latensi maksimum (contoh: < 200ms)",
+    "vision": "Visi jangka panjang produk dalam 1-2 kalimat inspiring",
+    "goals": [
+      "Tujuan strategis 1",
+      "Tujuan strategis 2",
+      "Tujuan strategis 3"
+    ],
+    "features": [
+      "Fitur utama 1 (dengan deskripsi singkat)",
+      "Fitur utama 2 (dengan deskripsi singkat)",
+      "Fitur utama 3 (dengan deskripsi singkat)"
+    ],
+    "userStories": [
+      "Sebagai [peran], saya ingin [tindakan] agar [manfaat]",
+      "Sebagai [peran], saya ingin [tindakan] agar [manfaat]"
+    ],
     "suggestedSections": [
       {
         "heading": "## Executive Summary",
@@ -1698,11 +1826,14 @@ Tolong hasilkan respons JSON murni dengan skema persis sebagai berikut:
 
 Jawab HANYA dengan JSON mentah tanpa format markdown tambahan.`;
 
-      const apiKeyToUse = parseApiKey(apiKey).key || undefined;
-      const dynamicAi = apiKeyToUse ? new GoogleGenAI({ apiKey: apiKeyToUse }) : getAIClient();
+      const text = await executeAIWithCustomKey({
+        apiKey,
+        provider,
+        aiModel,
+        prompt,
+        preferredModel: "gemini-2.5-flash",
+      });
 
-      const response = await generateContentWithFallback(dynamicAi, "gemini-2.5-flash", prompt);
-      const text = response?.text || "{}";
       const cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const result = JSON.parse(cleanedText);
       res.json(result);

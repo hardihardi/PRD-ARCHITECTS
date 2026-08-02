@@ -49,6 +49,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, query, order
 import { ShareTemplateModal } from "../components/prd/ShareTemplateModal";
 import { PRDDocumentAnalyzer } from "../components/prd/PRDDocumentAnalyzer";
 import { useTranslation } from "../contexts/LanguageContext";
+import { loadStoredApiKeysSync, syncApiKeysFromCloud } from "../lib/apiKeyStorage";
 
 const steps = [
   { id: 1, name: "Project Info", description: "Basic details" },
@@ -565,31 +566,111 @@ export function GenerateWizard() {
     const reqs = data.requirements || {};
     const st = data.suggestedTechStack || {};
 
+    const extractedProjectName = ep.projectName || ke.projectName || formData.projectName || "Sistem Aplikasi Baru";
+    const extractedDescription = ep.projectDescription || data.summary || ke.problemStatement || formData.projectDescription;
+    const extractedType = ep.projectType || ke.projectType || formData.projectType || "SaaS Application";
+    const extractedIndustry = ep.industry || ke.industry || formData.industry || "Technology";
+    const extractedTargetUser = ep.targetUser || (Array.isArray(ke.targetAudience) ? ke.targetAudience.join(", ") : ke.targetAudience) || formData.targetUser;
+    const extractedProblem = ep.existingProblem || ke.problemStatement || formData.existingProblem;
+    
+    const extractedPainPoints = ep.painPoints || (Array.isArray(reqs.functional) && reqs.functional.length > 0
+      ? reqs.functional
+          .map((f: any, idx: number) => `${idx + 1}. [${f.priority || "High"}] ${f.title}: ${f.description}`)
+          .join("\n")
+      : formData.painPoints);
+
+    const extractedOutcome = ep.expectedOutcome || (Array.isArray(ke.primaryGoals) && ke.primaryGoals.length > 0
+      ? ke.primaryGoals.map((g: string, idx: number) => `${idx + 1}. ${g}`).join("\n")
+      : formData.expectedOutcome);
+
+    const extractedFramework = ep.framework || st.framework || formData.framework || "React / Node.js";
+    const extractedDatabase = ep.database || st.database || formData.database || "PostgreSQL";
+    const extractedApiStyle = ep.apiStyle || st.apiStyle || formData.apiStyle || "REST";
+    const extractedAuthMethod = ep.authMethod || st.authMethod || formData.authMethod || "JWT & OAuth Google";
+    const extractedDeploymentEnv = ep.deploymentEnv || st.deploymentEnv || formData.deploymentEnv || "AWS / Cloud Run";
+
+    const extractedBudget = ep.budget || formData.budget || "$30,000 - $60,000";
+    const extractedTeamSize = ep.teamSize || formData.teamSize || "4-6 Orang (Fullstack & UI/UX)";
+    const extractedPerfReqs = ep.performanceReqs || formData.performanceReqs || "Waktu tanggap UI < 200ms, beban pemrosesan terdistribusi";
+    const extractedScalability = ep.scalability || formData.scalability || "Mampu menangani hingga 25,000 pengguna aktif bulanan";
+    const extractedLatency = ep.latency || formData.latency || "< 150ms untuk kueri data standar";
+
+    // 1. Update All Form Fields
     setFormData((prev) => ({
       ...prev,
-      projectName: ep.projectName || ke.projectName || prev.projectName,
-      projectDescription: ep.problemStatement || data.summary || prev.projectDescription,
-      projectType: ep.projectType || ke.projectType || prev.projectType,
-      industry: ep.industry || ke.industry || prev.industry,
-      targetUser: Array.isArray(ke.targetAudience)
-        ? ke.targetAudience.join(", ")
-        : ke.targetAudience || prev.targetUser,
-      existingProblem: ke.problemStatement || prev.existingProblem,
-      painPoints: Array.isArray(reqs.functional)
-        ? reqs.functional
-            .map((f: any) => `• [${f.priority || "Important"}] ${f.title}: ${f.description}`)
-            .join("\n")
-        : prev.painPoints,
-      expectedOutcome: Array.isArray(ke.primaryGoals)
-        ? ke.primaryGoals.join("\n")
-        : prev.expectedOutcome,
-      framework: st.framework || prev.framework,
-      database: st.database || prev.database,
-      apiStyle: st.apiStyle || prev.apiStyle,
+      projectName: extractedProjectName,
+      projectDescription: extractedDescription,
+      projectType: extractedType,
+      industry: extractedIndustry,
+      targetUser: extractedTargetUser,
+      existingProblem: extractedProblem,
+      painPoints: extractedPainPoints,
+      expectedOutcome: extractedOutcome,
+      framework: extractedFramework,
+      database: extractedDatabase,
+      apiStyle: extractedApiStyle,
+      authMethod: extractedAuthMethod,
+      deploymentEnv: extractedDeploymentEnv,
+      budget: extractedBudget,
+      teamSize: extractedTeamSize,
+      performanceReqs: extractedPerfReqs,
+      scalability: extractedScalability,
+      latency: extractedLatency,
     }));
 
-    setImportedSuccessMsg("Form PRD Generator telah berhasil diperbarui dengan hasil Analisis Dokumen AI!");
-    setTimeout(() => setImportedSuccessMsg(null), 5000);
+    // 2. Populate AI Suggestions Step (Vision, Goals, Features, User Stories)
+    const visionVal = ep.vision || (data.summary ? `Membangun ${extractedProjectName} sebagai platform ${extractedType} terdepan di industri ${extractedIndustry}.` : "");
+    const goalsVal: string[] = Array.isArray(ep.goals) && ep.goals.length > 0
+      ? ep.goals
+      : (Array.isArray(ke.primaryGoals) && ke.primaryGoals.length > 0 ? ke.primaryGoals : ["Meningkatkan efisiensi alur kerja produk", "Mengurangi waktu pemrosesan manual"]);
+    
+    const featuresVal: string[] = Array.isArray(ep.features) && ep.features.length > 0
+      ? ep.features
+      : (Array.isArray(reqs.functional) && reqs.functional.length > 0 ? reqs.functional.map((f: any) => `${f.title}: ${f.description}`) : ["Manajemen Akses & Autentikasi Pengguna", "Dasbor Analisis & Pelaporan Real-time"]);
+
+    const storiesVal: string[] = Array.isArray(ep.userStories) && ep.userStories.length > 0
+      ? ep.userStories
+      : (Array.isArray(reqs.userPersonas) && reqs.userPersonas.length > 0
+          ? reqs.userPersonas.map((p: any) => `Sebagai ${p.name || p.role || "Pengguna"}, saya ingin ${Array.isArray(p.needs) ? p.needs.join(" & ") : "akses fitur utama"} agar pekerjaan saya lebih efisien.`)
+          : ["Sebagai Pengguna, saya ingin masuk ke aplikasi dengan aman agar data saya terlindungi."]);
+
+    setVisionInput(visionVal);
+    setSuggestionVision(visionVal);
+    setOriginalVision(visionVal);
+    setVisionStatus("accepted");
+
+    setGoalsInput(goalsVal.join("\n"));
+    setSuggestionGoals(goalsVal);
+    setOriginalGoals(goalsVal);
+    setGoalsStatus("accepted");
+
+    setFeaturesInput(featuresVal.join("\n"));
+    setSuggestionFeatures(featuresVal);
+    setOriginalFeatures(featuresVal);
+    setFeaturesStatus("accepted");
+
+    setStoriesInput(storiesVal.join("\n"));
+    setSuggestionUserStories(storiesVal);
+    setOriginalUserStories(storiesVal);
+    setUserStoriesStatus("accepted");
+
+    // 3. Populate Custom Sections if provided in suggestedSections
+    if (Array.isArray(ep.suggestedSections) && ep.suggestedSections.length > 0) {
+      const newCustomSecs = ep.suggestedSections.map((sec: any, idx: number) => ({
+        id: `sec-doc-${Date.now()}-${idx}`,
+        heading: sec.heading || sec.title || `Seksi Kustom ${idx + 1}`,
+        content: sec.content || sec.description || "",
+      }));
+      setCustomSections((prev) => {
+        // combine unique by heading
+        const existingHeadings = new Set(prev.map((s) => s.heading.toLowerCase()));
+        const filteredNew = newCustomSecs.filter((ns) => !existingHeadings.has(ns.heading.toLowerCase()));
+        return [...prev, ...filteredNew];
+      });
+    }
+
+    setImportedSuccessMsg("Form PRD Generator & Seluruh Saran AI telah berhasil diisi secara lengkap dari Analisis Dokumen!");
+    setTimeout(() => setImportedSuccessMsg(null), 6000);
   };
 
   useEffect(() => {
@@ -1470,13 +1551,7 @@ export function GenerateWizard() {
     setSavingError(false);
     setGenerateError(null);
 
-    let apiKeys = null;
-    try {
-      const savedKeys = localStorage.getItem("app_api_keys_detailed");
-      if (savedKeys) {
-        apiKeys = JSON.parse(savedKeys);
-      }
-    } catch (e) {}
+    let apiKeys = loadStoredApiKeysSync();
 
     // Map aiModel to Provider
     let providerName = "Gemini";
@@ -1485,7 +1560,18 @@ export function GenerateWizard() {
     if (formData.aiModel.includes("z-ai")) providerName = "Z.ai";
     if (formData.aiModel.includes("xiaomi")) providerName = "Xiaomi.ai";
 
-    const preferredKey = apiKeys?.[providerName]?.main || "";
+    let preferredKey = apiKeys?.[providerName]?.main || "";
+
+    // If local key is empty, try quick sync from cloud database
+    if (!preferredKey) {
+      try {
+        const { keys } = await syncApiKeysFromCloud();
+        apiKeys = keys;
+        preferredKey = apiKeys?.[providerName]?.main || "";
+      } catch (err) {
+        console.warn("Cloud key sync fallback error:", err);
+      }
+    }
 
     // Simulate API Call to backend
     try {
@@ -1812,24 +1898,24 @@ export function GenerateWizard() {
                           }}
                           className="w-full appearance-none px-4 py-2.5 bg-white border border-indigo-200 text-indigo-950 rounded-xl text-xs font-semibold shadow-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer pr-10 hover:border-indigo-300 transition-all"
                         >
-                          <option value="">🎯 Quick Dropdown: Pilih Template...</option>
-                          <optgroup label="✨ Template Bawaan (Industri)">
-                            <option value="ecommerce">🛒 E-Commerce & Marketplace</option>
-                            <option value="saas">📊 SaaS Subscription Analytics</option>
-                            <option value="internal-tool">💼 Sistem Manajemen Admin HR</option>
-                            <option value="fintech">💳 Remitansi & Global E-Wallet</option>
-                            <option value="healthtech">🏥 Portal Booking Telemedisin</option>
-                            <option value="crm">🤝 Platform CRM Omnichannel</option>
-                            <option value="elearning">🎓 LMS & E-Learning Platform</option>
-                            <option value="logistics">🚚 Logistik & Supply Chain Tracker</option>
-                            <option value="on-demand">🛵 Super App On-Demand Services</option>
-                            <option value="ai-copilot">🤖 Asisten Cerdas AI & Workspace</option>
+                          <option value="">Pilih Template PRD...</option>
+                          <optgroup label="Template Bawaan (Industri)">
+                            <option value="ecommerce">E-Commerce & Marketplace</option>
+                            <option value="saas">SaaS Subscription Analytics</option>
+                            <option value="internal-tool">Sistem Manajemen Admin HR</option>
+                            <option value="fintech">Remitansi & Global E-Wallet</option>
+                            <option value="healthtech">Portal Booking Telemedisin</option>
+                            <option value="crm">Platform CRM Omnichannel</option>
+                            <option value="elearning">LMS & E-Learning Platform</option>
+                            <option value="logistics">Logistik & Supply Chain Tracker</option>
+                            <option value="on-demand">Super App On-Demand Services</option>
+                            <option value="ai-copilot">Asisten Cerdas AI & Workspace</option>
                           </optgroup>
                           {communityTemplates.length > 0 && (
-                            <optgroup label="👥 Template Komunitas">
+                            <optgroup label="Template Komunitas">
                               {communityTemplates.map(t => (
                                 <option key={t.id} value={t.id}>
-                                  👥 {t.name || t.projectName || "Template Tanpa Nama"}
+                                  {t.name || t.projectName || "Template Tanpa Nama"}
                                 </option>
                               ))}
                             </optgroup>
@@ -1845,15 +1931,15 @@ export function GenerateWizard() {
                 </div>
 
                 {/* AI Document Analysis Integration Banner */}
-                <div className="mb-8 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-2xl border border-purple-200/80 shadow-xs relative overflow-hidden">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="mb-8 p-4 sm:p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-2xl border border-purple-200/80 shadow-xs relative overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-[#696cff] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                         <Sparkles className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                          AI Document Analyzer & Key Requirements Extractor
+                        <h3 className="text-sm font-bold text-gray-900 flex flex-wrap items-center gap-2">
+                          <span>AI Document Analyzer & Key Requirements Extractor</span>
                           <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-purple-200">
                             GEMINI 2.5 FLASH
                           </span>
@@ -1867,7 +1953,7 @@ export function GenerateWizard() {
                     <button
                       type="button"
                       onClick={() => setShowDocAnalyzer(!showDocAnalyzer)}
-                      className="bg-[#696cff] hover:bg-[#5a5ddb] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs shrink-0 flex items-center gap-2 transition-all cursor-pointer"
+                      className="bg-[#696cff] hover:bg-[#5a5ddb] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs shrink-0 flex items-center justify-center gap-2 transition-all cursor-pointer w-full sm:w-auto"
                     >
                       <Wand2 className="w-4 h-4" />
                       {showDocAnalyzer ? "Sembunyikan Analyzer" : "Buka AI Doc Analyzer"}
@@ -1961,7 +2047,7 @@ export function GenerateWizard() {
                         placeholder="e.g. Healthcare, Finance"
                       />
                     </div>
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700">
                         Target User Persona
                       </label>
@@ -1973,6 +2059,32 @@ export function GenerateWizard() {
                         className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         placeholder="e.g. Clinic Administrators, Doctors"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 flex items-center justify-between">
+                        <span>AI Model Tuning</span>
+                        <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">Engine</span>
+                      </label>
+                      <select
+                        name="aiModel"
+                        value={formData.aiModel}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="gemini-3.1-pro-preview">
+                          Gemini 3.1 Pro (Preview)
+                        </option>
+                        <option value="gemini-3.5-flash">
+                          Gemini 3.5 Flash
+                        </option>
+                        <option value="claude-3-5-sonnet">
+                          Claude 3.5 Sonnet
+                        </option>
+                        <option value="gpt-4o">OpenAI GPT-4o</option>
+                        <option value="deepseek-coder">DeepSeek Coder</option>
+                        <option value="xiaomi-ai">Xiaomi AI</option>
+                        <option value="z-ai">Z.ai</option>
+                      </select>
                     </div>
                   </div>
 
@@ -2580,7 +2692,7 @@ export function GenerateWizard() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-200">
+                  <div className="pt-4 border-t border-gray-200">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
                         Template PRD
@@ -2596,32 +2708,6 @@ export function GenerateWizard() {
                           Waterfall (Traditional)
                         </option>
                         <option value="Lean">Lean Startup</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        AI Model Tuning
-                      </label>
-                      <select
-                        name="aiModel"
-                        value={formData.aiModel}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
-                      >
-                        <option value="gemini-3.1-pro-preview">
-                          Gemini 3.1 Pro (Preview)
-                        </option>
-                        <option value="gemini-3.5-flash">
-                          Gemini 3.5 Flash
-                        </option>
-                        <option value="claude-3-5-sonnet">
-                          Claude 3.5 Sonnet
-                        </option>
-                        <option value="gpt-4o">OpenAI GPT-4o</option>
-                        <option value="deepseek-coder">DeepSeek Coder</option>
-                        <option value="xiaomi-ai">Xiaomi AI</option>
-                        <option value="z-ai">Z.ai</option>
                       </select>
                     </div>
                   </div>

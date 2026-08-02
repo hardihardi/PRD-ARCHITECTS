@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { loadStoredApiKeysSync } from "../lib/apiKeyStorage";
 import {
   Globe,
   Palette,
@@ -279,10 +280,18 @@ export function WebExtractor() {
     if (tabToUse === "crawl") endpoint = "/api/v1/crawl-website";
 
     try {
+      const storedKeys = loadStoredApiKeysSync();
+      const activeApiKey = storedKeys.Gemini?.main || storedKeys.Claude?.main || storedKeys.Chatgpt?.main || "";
+      const activeProvider = storedKeys.Gemini?.main ? "Gemini" : storedKeys.Claude?.main ? "Claude" : storedKeys.Chatgpt?.main ? "Chatgpt" : "Gemini";
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: finalUrl }),
+        body: JSON.stringify({
+          url: finalUrl,
+          apiKey: activeApiKey,
+          provider: activeProvider,
+        }),
       });
 
       const data = await response.json();
@@ -371,11 +380,6 @@ export function WebExtractor() {
   const handleTabChange = (newTab: ActiveTab) => {
     setActiveTab(newTab);
     setErrorMessage(null);
-
-    // Auto-fetch if empty
-    if (newTab === "styleguide" && !styleguideData) handleRunExtraction("styleguide");
-    if (newTab === "images" && !imagesData) handleRunExtraction("images");
-    if (newTab === "crawl" && !crawlData) handleRunExtraction("crawl");
   };
 
   // Pre-fill prompt and navigate to Design Generator
