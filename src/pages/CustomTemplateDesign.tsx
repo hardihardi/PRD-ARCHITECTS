@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import {
   ArrowLeft,
   Sparkles,
@@ -45,6 +46,7 @@ interface DesignTemplate {
 
 export function CustomTemplateDesign() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
@@ -135,21 +137,21 @@ export function CustomTemplateDesign() {
             setAccessibility(data.accessibility);
           }
         } else {
-          setError("Template design tidak ditemukan.");
+          setError(t("customTemplateDesign.errNotFound"));
         }
       } catch (err: any) {
         console.error("Gagal memuat template design:", err);
-        setError("Gagal memuat detail template design untuk diedit.");
+        setError(t("customTemplateDesign.errLoad"));
       }
     };
 
     loadTemplate();
-  }, [editId]);
+  }, [editId, t]);
 
   // AI Suggestions function
   const handleGenerateAISuggestions = async () => {
     if (!projectType || !industry) {
-      setError("Silakan masukkan Tipe Proyek dan Industri untuk memicu saran AI.");
+      setError(t("customTemplate.errAiInput")); // reusing same string
       return;
     }
 
@@ -168,7 +170,7 @@ export function CustomTemplateDesign() {
       });
 
       if (!response.ok) {
-        throw new Error("Gagal memperoleh respon dari AI");
+        throw new Error(t("customTemplateDesign.errAiFail"));
       }
 
       const data = await response.json();
@@ -192,10 +194,10 @@ export function CustomTemplateDesign() {
       if (Array.isArray(data.uiComponents)) setUiComponents(data.uiComponents);
       if (Array.isArray(data.accessibility)) setAccessibility(data.accessibility);
 
-      setSuccess("Saran Desain AI berhasil diterapkan! Anda dapat menyesuaikannya kembali.");
+      setSuccess(t("customTemplateDesign.aiSuccess"));
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Gagal membuat template kustom lewat AI.");
+      setError(err.message || t("customTemplateDesign.errAiFail"));
     } finally {
       setIsAiLoading(false);
     }
@@ -266,7 +268,7 @@ export function CustomTemplateDesign() {
         // Edit existing doc
         const docRef = doc(db, "design_templates", editId);
         await updateDoc(docRef, payload);
-        setSuccess("Template desain kustom berhasil diperbarui!");
+        setSuccess(t("customTemplateDesign.updateSuccess"));
       } else {
         // Create new doc
         const templatesRef = collection(db, "design_templates");
@@ -275,7 +277,7 @@ export function CustomTemplateDesign() {
           createdAt: serverTimestamp(),
           isFeatured: false
         });
-        setSuccess("Template desain kustom berhasil disimpan ke katalog!");
+        setSuccess(t("customTemplateDesign.saveSuccess"));
       }
 
       setTimeout(() => {
@@ -283,7 +285,7 @@ export function CustomTemplateDesign() {
       }, 1500);
     } catch (err: any) {
       console.error(err);
-      setError("Gagal menyimpan template desain: " + (err.message || "Internal error"));
+      setError(t("customTemplateDesign.errSave") + " " + (err.message || "Internal error"));
     } finally {
       setIsSaving(false);
     }
@@ -299,14 +301,14 @@ export function CustomTemplateDesign() {
             className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-slate-900 mb-2 transition"
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Kembali ke Katalog Desain
+            {t("common.back")}
           </Link>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Palette className="h-8 w-8 text-indigo-600 animate-pulse-subtle" />
-            {editId ? "Edit Template Desain Kustom" : "Buat Template Desain Kustom AI"}
+            {editId ? t("customTemplateDesign.editTitle") : t("customTemplateDesign.title")}
           </h1>
           <p className="mt-1 text-sm text-slate-500 max-w-2xl">
-            Rancang sistem desain dan visual token kustom Anda. Biarkan AI merangkum blueprint responsif yang siap melahirkan User Interface kelas dunia.
+            {editId ? t("customTemplateDesign.editSubtitle") : t("customTemplateDesign.subtitle")}
           </p>
         </div>
       </div>
@@ -336,17 +338,17 @@ export function CustomTemplateDesign() {
             
             <h2 className="text-base font-extrabold flex items-center gap-2 border-b border-slate-100 pb-3 text-slate-900">
               <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
-              Saran Desain Cerdas (AI)
+              {t("customTemplateDesign.aiTitle")}
             </h2>
 
             <div className="space-y-4 mt-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Tipe Proyek <span className="text-rose-500">*</span>
+                  {t("customTemplate.typeLabel")} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Marketplace Hewan, SaaS CRM, FinTech Crypto"
+                  placeholder={t("customTemplate.typePlaceholder")}
                   value={projectType}
                   onChange={(e) => setProjectType(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
@@ -355,11 +357,11 @@ export function CustomTemplateDesign() {
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Industri / Domain <span className="text-rose-500">*</span>
+                  {t("customTemplate.industryLabel")} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Healthcare, Retail, Web3, Logistics"
+                  placeholder={t("customTemplate.industryPlaceholder")}
                   value={industry}
                   onChange={(e) => setIndustry(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
@@ -375,12 +377,12 @@ export function CustomTemplateDesign() {
                 {isAiLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    Memikirkan UI/UX Blueprint...
+                    {t("common.loading")}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 text-indigo-300" />
-                    Saran Layout & Token dengan AI
+                    {t("customTemplateDesign.aiBtn")}
                   </>
                 )}
               </button>
@@ -391,17 +393,17 @@ export function CustomTemplateDesign() {
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
             <h2 className="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Settings className="w-4.5 h-4.5 text-slate-400" />
-              Token Visual & Metadata
+              {t("customTemplateDesign.genTitle")}
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Nama Template Desain <span className="text-red-500">*</span>
+                  {t("customTemplateDesign.nameLabel")}
                 </label>
                 <input
                   type="text"
-                  placeholder="Misal: Minimalist Wealth Dashboard"
+                  placeholder={t("customTemplateDesign.namePlaceholder")}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none border-solid"
@@ -410,7 +412,7 @@ export function CustomTemplateDesign() {
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Kategori
+                  {t("customTemplate.categoryLabel")}
                 </label>
                 <select
                   value={category}
@@ -425,7 +427,7 @@ export function CustomTemplateDesign() {
                   <option value="Logistics">Logistics & Mobility</option>
                   <option value="AI & Productivity">AI & Productivity</option>
                   <option value="Media & Social">Media & Social Community</option>
-                  <option value="Community">Umum / Lainnya</option>
+                  <option value="Community">{t("customTemplateDesign.categoryCommunity")}</option>
                 </select>
               </div>
 
@@ -503,10 +505,10 @@ export function CustomTemplateDesign() {
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Deskripsi Ringkas <span className="text-red-500">*</span>
+                  {t("customTemplateDesign.shortDescLabel")} <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  placeholder="Ringkasan 1 kalimat kegunaan sistem desain ini..."
+                  placeholder={t("customTemplateDesign.shortDescPlaceholder")}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[60px] border-solid"
@@ -515,10 +517,10 @@ export function CustomTemplateDesign() {
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Sistem Identitas Lengkap (Visual Mood)
+                  {t("customTemplateDesign.fullDescLabel")}
                 </label>
                 <textarea
-                  placeholder="Jelaskan secara detail nuansa mood, margin, kontras, dan visual..."
+                  placeholder={t("customTemplateDesign.fullDescPlaceholder")}
                   value={fullDescription}
                   onChange={(e) => setFullDescription(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[90px] border-solid"
@@ -535,17 +537,17 @@ export function CustomTemplateDesign() {
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Layout className="w-4.5 h-4.5 text-indigo-600" />
-              Spesifikasi Tata Letak Responsif (Responsive Blueprint)
+              {t("customTemplateDesign.layoutTitle")}
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <Monitor className="w-3.5 h-3.5 text-slate-400" />
-                  Desktop Layout Specification
+                  {t("customTemplateDesign.desktopSpecLabel")}
                 </label>
                 <textarea
-                  placeholder="Contoh: Sidebar navigasi utama lebar 240px dengan model sticky + panel tengah berisi grid dashboard multi-kolom..."
+                  placeholder={t("customTemplateDesign.desktopSpecPlaceholder")}
                   value={desktopSpec}
                   onChange={(e) => setDesktopSpec(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[80px] border-solid font-medium leading-relaxed"
@@ -555,10 +557,10 @@ export function CustomTemplateDesign() {
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                  Mobile Layout Specification
+                  {t("customTemplateDesign.mobileSpecLabel")}
                 </label>
                 <textarea
-                  placeholder="Contoh: Navigasi bar bagian bawah (sticky bottom tab-bar) untuk akses satu tangan + drawer slide-up filter..."
+                  placeholder={t("customTemplateDesign.mobileSpecPlaceholder")}
                   value={mobileSpec}
                   onChange={(e) => setMobileSpec(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[80px] border-solid font-medium leading-relaxed"
@@ -568,10 +570,10 @@ export function CustomTemplateDesign() {
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <Type className="w-3.5 h-3.5 text-slate-400" />
-                  Typography, Font Scales & Kerning
+                  {t("customTemplateDesign.typographyLabel")}
                 </label>
                 <textarea
-                  placeholder="Contoh: Menggunakan Inter dengan font-weight 700 untuk angka nominal besar agar tidak melar dan sangat mudah dibaca..."
+                  placeholder={t("customTemplateDesign.typographyPlaceholder")}
                   value={typography}
                   onChange={(e) => setTypography(e.target.value)}
                   className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[80px] border-solid font-medium leading-relaxed"
@@ -584,13 +586,13 @@ export function CustomTemplateDesign() {
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Layers className="w-4.5 h-4.5 text-indigo-600" />
-              Komponen UI Utama (UI Components included)
+              {t("customTemplateDesign.uiComponentsTitle")}
             </h2>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Tambahkan Komponen UI Utama (cth: Bento Asset Cards, Transaction Group)..."
+                placeholder={t("customTemplateDesign.uiComponentsInputPlaceholder")}
                 value={newUiComponent}
                 onChange={(e) => setNewUiComponent(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddUiComponent()}
@@ -601,7 +603,7 @@ export function CustomTemplateDesign() {
                 onClick={handleAddUiComponent} 
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Tambah
+                <Plus className="w-4 h-4" /> {t("customTemplate.featAddBtn")}
               </button>
             </div>
 
@@ -631,13 +633,13 @@ export function CustomTemplateDesign() {
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <HeartHandshake className="w-4.5 h-4.5 text-emerald-600" />
-              Aksesibilitas & Standar UX (WCAG Compliance)
+              {t("customTemplateDesign.accessibilityTitle")}
             </h2>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Tambahkan Kriteria Aksesibilitas (cth: Dukungan navigasi keyboard penuh)..."
+                placeholder={t("customTemplateDesign.accessibilityInputPlaceholder")}
                 value={newAccessibility}
                 onChange={(e) => setNewAccessibility(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddAccessibility()}
@@ -648,7 +650,7 @@ export function CustomTemplateDesign() {
                 onClick={handleAddAccessibility} 
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Tambah
+                <Plus className="w-4 h-4" /> {t("customTemplate.featAddBtn")}
               </button>
             </div>
 
@@ -681,15 +683,15 @@ export function CustomTemplateDesign() {
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Eye className="w-4.5 h-4.5 text-indigo-600" />
-              Prompt Instruksi AI Desainer (AI Prompt)
+              {t("customTemplateDesign.promptTitle")}
             </h2>
 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Rangkuman Prompt Akhir
+                {t("customTemplateDesign.promptLabel")}
               </label>
               <textarea
-                placeholder="Instruksi prompt yang dikirimkan ke modul kecerdasan buatan untuk mengonstruksikan Design System lengkap..."
+                placeholder={t("customTemplateDesign.promptPlaceholder")}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 className="w-full text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 px-3.5 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none min-h-[140px] border-solid font-mono leading-relaxed"
@@ -701,7 +703,7 @@ export function CustomTemplateDesign() {
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 sm:space-y-0 space-y-2">
             <Link to="/template-design" className="w-full sm:w-auto">
               <button type="button" className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 py-3 px-6 rounded-xl text-xs font-bold transition shadow-2xs border-solid cursor-pointer">
-                Batal
+                {t("common.cancel")}
               </button>
             </Link>
             <button
@@ -712,12 +714,12 @@ export function CustomTemplateDesign() {
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  Menyimpan Blueprint...
+                  {t("common.loading")}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  {editId ? "Perbarui Template Desain" : "Simpan & Daftarkan Template Desain"}
+                  {editId ? t("customTemplateDesign.updateBtn") : t("customTemplateDesign.saveDraftBtn")}
                 </>
               )}
             </button>

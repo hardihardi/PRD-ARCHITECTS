@@ -250,17 +250,23 @@ export function Library() {
             </p>
           </div>
         ) : prds.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileText className="mx-auto h-12 w-12 text-gray-300" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">
-              {t("library.noPRDsYet")}
-            </h3>
-            <p className="mt-2 text-sm text-gray-500 mb-6">
-              {t("library.createFirstPRDDesc")}
-            </p>
+          <div className="p-6 sm:p-8 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  {t("library.noPRDsYet")}
+                </h3>
+                <p className="mt-1 text-xs sm:text-sm text-gray-500 max-w-md leading-relaxed">
+                  {t("library.createFirstPRDDesc")}
+                </p>
+              </div>
+            </div>
             <Link
               to="/generate"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+              className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-all shrink-0 w-full sm:w-auto"
             >
               {t("sidebar.generatePRD")}
             </Link>

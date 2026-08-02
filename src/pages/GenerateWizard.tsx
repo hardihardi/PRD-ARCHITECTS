@@ -47,6 +47,7 @@ import { cn } from "../lib/utils";
 import { db } from "../lib/firebase";
 import { collection, addDoc, serverTimestamp, doc, getDoc, getDocs, query, orderBy } from "firebase/firestore";
 import { ShareTemplateModal } from "../components/prd/ShareTemplateModal";
+import { PRDDocumentAnalyzer } from "../components/prd/PRDDocumentAnalyzer";
 import { useTranslation } from "../contexts/LanguageContext";
 
 const steps = [
@@ -532,6 +533,8 @@ export function GenerateWizard() {
     }
   };
 
+  const [showDocAnalyzer, setShowDocAnalyzer] = useState(false);
+
   const [formData, setFormData] = useState(() => draft?.formData || {
     projectName: "",
     projectDescription: "",
@@ -554,6 +557,40 @@ export function GenerateWizard() {
     aiModel: "gemini-3.5-flash",
     templateType: "Agile",
   });
+
+  const handleApplyDocAnalysisToWizard = (data: any) => {
+    if (!data) return;
+    const ep = data.enrichmentPayload || {};
+    const ke = data.keyEntities || {};
+    const reqs = data.requirements || {};
+    const st = data.suggestedTechStack || {};
+
+    setFormData((prev) => ({
+      ...prev,
+      projectName: ep.projectName || ke.projectName || prev.projectName,
+      projectDescription: ep.problemStatement || data.summary || prev.projectDescription,
+      projectType: ep.projectType || ke.projectType || prev.projectType,
+      industry: ep.industry || ke.industry || prev.industry,
+      targetUser: Array.isArray(ke.targetAudience)
+        ? ke.targetAudience.join(", ")
+        : ke.targetAudience || prev.targetUser,
+      existingProblem: ke.problemStatement || prev.existingProblem,
+      painPoints: Array.isArray(reqs.functional)
+        ? reqs.functional
+            .map((f: any) => `• [${f.priority || "Important"}] ${f.title}: ${f.description}`)
+            .join("\n")
+        : prev.painPoints,
+      expectedOutcome: Array.isArray(ke.primaryGoals)
+        ? ke.primaryGoals.join("\n")
+        : prev.expectedOutcome,
+      framework: st.framework || prev.framework,
+      database: st.database || prev.database,
+      apiStyle: st.apiStyle || prev.apiStyle,
+    }));
+
+    setImportedSuccessMsg("Form PRD Generator telah berhasil diperbarui dengan hasil Analisis Dokumen AI!");
+    setTimeout(() => setImportedSuccessMsg(null), 5000);
+  };
 
   useEffect(() => {
     if (draftRestored) return;
@@ -1066,6 +1103,7 @@ export function GenerateWizard() {
   const [activePrdTab, setActivePrdTab] = useState<
     "prd" | "security"
   >("prd");
+  const [showRawPrd, setShowRawPrd] = useState(false);
   
   // Diagrams tab states
 
@@ -1804,6 +1842,49 @@ export function GenerateWizard() {
 
                     </div>
                   </div>
+                </div>
+
+                {/* AI Document Analysis Integration Banner */}
+                <div className="mb-8 p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-2xl border border-purple-200/80 shadow-xs relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#696cff] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          AI Document Analyzer & Key Requirements Extractor
+                          <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-purple-200">
+                            GEMINI 2.5 FLASH
+                          </span>
+                        </h3>
+                        <p className="text-xs text-gray-600 mt-1 max-w-2xl leading-relaxed">
+                          Unggah berkas spesifikasi awal (.txt, .docx, .md) atau tempelkan teks penjelasan produk. AI akan merangkum poin penting, mengekstrak kebutuhan fitur, dan mengisi form PRD ini secara otomatis.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDocAnalyzer(!showDocAnalyzer)}
+                      className="bg-[#696cff] hover:bg-[#5a5ddb] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs shrink-0 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      {showDocAnalyzer ? "Sembunyikan Analyzer" : "Buka AI Doc Analyzer"}
+                    </button>
+                  </div>
+
+                  {/* Expandable Document Analyzer */}
+                  {showDocAnalyzer && (
+                    <div className="mt-5 pt-5 border-t border-purple-100">
+                      <PRDDocumentAnalyzer
+                        onApplyToWizard={(result) => {
+                          handleApplyDocAnalysisToWizard(result);
+                          setShowDocAnalyzer(false);
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Toast Feedback */}
@@ -2649,15 +2730,24 @@ export function GenerateWizard() {
                           <span className="hidden sm:inline">Bagikan</span>
                         </button>
                         <button
+                          onClick={() => setShowRawPrd(!showRawPrd)}
+                          className={`bg-white border px-3 sm:px-4 py-2 text-sm rounded-md shadow-sm flex items-center gap-2 transition-colors ${showRawPrd ? 'border-indigo-500 text-indigo-700 bg-indigo-50' : 'border-gray-300 hover:bg-gray-50 text-gray-700'}`}
+                          title="Lihat Raw Markdown"
+                        >
+                          <FileCode className={`h-4 w-4 ${showRawPrd ? 'text-indigo-600' : 'text-gray-500'}`} />
+                          <span className="hidden sm:inline">{showRawPrd ? "Sembunyikan Raw" : "Raw Markdown"}</span>
+                        </button>
+                        <button
                           onClick={copyToClipboard}
                           className="bg-white border border-gray-300 px-3 sm:px-4 py-2 text-sm rounded-md shadow-sm hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                          title="Salin PRD"
                         >
                           {isCopied ? (
                             <Check className="h-4 w-4 text-green-500" />
                           ) : (
                             <Copy className="h-4 w-4 text-gray-500" />
                           )}
-                          <span className="hidden sm:inline">{isCopied ? "Copied!" : "Copy"}</span>
+                          <span className="hidden sm:inline">{isCopied ? "Disalin!" : "Salin"}</span>
                         </button>
                         <button
                           onClick={() => {
@@ -2740,8 +2830,18 @@ export function GenerateWizard() {
                         id="prd-export-content"
                         className="bg-white border border-gray-200 rounded-lg p-5 lg:p-10 text-gray-800 text-left w-full mx-auto max-w-full overflow-hidden"
                       >
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
+                        {showRawPrd ? (
+                          <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden shadow-inner">
+                            <div className="flex items-center px-4 py-2 bg-slate-800 border-b border-slate-700">
+                              <span className="text-xs font-semibold text-slate-300">Raw Markdown Output</span>
+                            </div>
+                            <pre className="p-5 text-sm font-mono whitespace-pre-wrap text-slate-300 break-words overflow-x-auto h-full max-h-[70vh]">
+                              {generatedPRD}
+                            </pre>
+                          </div>
+                        ) : (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
                           components={{
                             pre: ({ node, ...props }: any) => {
                               const hasMermaid = node?.children?.some(
@@ -2910,6 +3010,7 @@ export function GenerateWizard() {
                         >
                           {generatedPRD}
                         </ReactMarkdown>
+                        )}
                       </div>
                     )}
 

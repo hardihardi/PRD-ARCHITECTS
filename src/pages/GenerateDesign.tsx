@@ -1011,6 +1011,27 @@ Desain Aplikasi: ${prompt}
               </div>
             )}
             
+            {/* Quick Web Extractor Banner */}
+            <div className="p-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">AI Web Extractor & Scraper Suite</span>
+                  <span className="text-[11px] text-slate-500 block">Extract Styleguide, Scrape Media Assets, or Crawl Website structure directly</span>
+                </div>
+              </div>
+
+              <Link
+                to="/web-extractor"
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-all shrink-0"
+              >
+                <span>Buka Web Extractor</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
             {/* Project Idea Textarea */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">

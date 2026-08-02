@@ -49,6 +49,9 @@ export function PRDCollabPanel({ prd, prdId }: { prd: any; prdId: string }) {
 
   const [activeTab, setActiveTab] = useState("comments");
   const [comments, setComments] = useState<any[]>([]);
+  const [commentFilter, setCommentFilter] = useState<"all" | "active" | "resolved">("all");
+  const [replyInput, setReplyInput] = useState<Record<string, string>>({});
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [versions, setVersions] = useState<any[]>([]);
   const [collaborators, setCollaborators] = useState<string[]>(
     prd?.collaborators || [],
@@ -171,10 +174,52 @@ export function PRDCollabPanel({ prd, prdId }: { prd: any; prdId: string }) {
         text: newComment.trim(),
         createdBy: user.email,
         createdAt: serverTimestamp(),
+        isResolved: false,
+        replies: [],
       });
       setNewComment("");
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleAddReply = async (commentId: string) => {
+    const text = replyInput[commentId]?.trim();
+    if (!text || !user) return;
+
+    try {
+      const commentRef = doc(db, `prds/${prdId}/comments`, commentId);
+      const targetComment = comments.find((c) => c.id === commentId);
+      const existingReplies = targetComment?.replies || [];
+
+      const newReply = {
+        id: `reply-${Date.now()}`,
+        text,
+        createdBy: user.email,
+        createdAt: new Date().toISOString(),
+      };
+
+      await updateDoc(commentRef, {
+        replies: [...existingReplies, newReply],
+      });
+
+      setReplyInput((prev) => ({ ...prev, [commentId]: "" }));
+      setReplyingToId(null);
+    } catch (e) {
+      console.error("Gagal menambahkan balasan komentar:", e);
+    }
+  };
+
+  const handleToggleResolve = async (commentId: string, currentResolved: boolean) => {
+    try {
+      const commentRef = doc(db, `prds/${prdId}/comments`, commentId);
+      await updateDoc(commentRef, {
+        isResolved: !currentResolved,
+        resolvedBy: !currentResolved ? user?.email : null,
+        resolvedAt: !currentResolved ? new Date().toISOString() : null,
+      });
+    } catch (e) {
+      console.error("Gagal memperbarui status resolusi komentar:", e);
     }
   };
 
@@ -281,66 +326,193 @@ export function PRDCollabPanel({ prd, prdId }: { prd: any; prdId: string }) {
           value="comments"
           className="flex-1 overflow-hidden m-0 flex flex-col p-0"
         >
+          {/* Thread Filter Bar */}
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200">
+              <button
+                onClick={() => setCommentFilter("all")}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                  commentFilter === "all"
+                    ? "bg-[#696cff] text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                All ({comments.length})
+              </button>
+              <button
+                onClick={() => setCommentFilter("active")}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                  commentFilter === "active"
+                    ? "bg-[#696cff] text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Active ({comments.filter((c) => !c.isResolved).length})
+              </button>
+              <button
+                onClick={() => setCommentFilter("resolved")}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                  commentFilter === "resolved"
+                    ? "bg-[#696cff] text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Resolved ({comments.filter((c) => c.isResolved).length})
+              </button>
+            </div>
+          </div>
+
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              {comments.length === 0 && (
-                <div className="text-center text-gray-500 text-sm mt-10">
-                  No comments yet. Be the first to comment!
+              {comments.filter((c) => {
+                if (commentFilter === "active") return !c.isResolved;
+                if (commentFilter === "resolved") return !!c.isResolved;
+                return true;
+              }).length === 0 && (
+                <div className="text-center text-gray-500 text-xs py-12 space-y-2">
+                  <MessageSquare className="w-8 h-8 text-gray-300 mx-auto" />
+                  <p>Tidak ada komentar untuk filter ini.</p>
                 </div>
               )}
-              {comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3 text-sm">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback>
-                      {comment.createdBy?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 bg-gray-50 p-3 rounded-xl rounded-tl-none border border-gray-100">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-gray-900 truncate pr-2">
-                        {comment.createdBy}
-                      </span>
-                      <span className="text-xs text-gray-400 shrink-0">
-                        {comment.createdAt?.toDate
-                          ? comment.createdAt
-                              .toDate()
-                              .toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                          : "..."}
-                      </span>
-                    </div>
-                    <div className="text-gray-700 whitespace-pre-wrap">
-                      {comment.text
-                        .split("\n")
-                        .map((line: string, i: number) =>
-                          line.startsWith("> ") ? (
-                            <div
-                              key={i}
-                              className="border-l-2 border-indigo-300 pl-2 text-gray-500 italic mb-1 text-xs bg-white p-1 rounded-r"
-                            >
-                              {line.substring(2)}
+
+              {comments
+                .filter((c) => {
+                  if (commentFilter === "active") return !c.isResolved;
+                  if (commentFilter === "resolved") return !!c.isResolved;
+                  return true;
+                })
+                .map((comment) => {
+                  const isResolved = !!comment.isResolved;
+                  const replies = comment.replies || [];
+                  const isReplying = replyingToId === comment.id;
+
+                  return (
+                    <div
+                      key={comment.id}
+                      className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
+                        isResolved
+                          ? "bg-gray-50/80 border-gray-200 opacity-75"
+                          : "bg-white border-gray-200 shadow-2xs"
+                      }`}
+                    >
+                      {/* Comment Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-7 h-7 shrink-0">
+                            <AvatarFallback className="bg-[#e7e7ff] text-[#696cff] text-xs font-bold">
+                              {comment.createdBy?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <span className="font-bold text-xs text-gray-900 block">
+                              {comment.createdBy}
+                            </span>
+                            <span className="text-[10px] text-gray-400 block">
+                              {comment.createdAt?.toDate
+                                ? comment.createdAt
+                                    .toDate()
+                                    .toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                : "Baru saja"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={() => handleToggleResolve(comment.id, isResolved)}
+                          variant="ghost"
+                          size="sm"
+                          className={`h-6 text-[10px] font-bold px-2 rounded-lg gap-1 ${
+                            isResolved
+                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          {isResolved ? "Resolved" : "Mark Resolved"}
+                        </Button>
+                      </div>
+
+                      {/* Comment Text */}
+                      <div className="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap pl-9">
+                        {comment.text
+                          .split("\n")
+                          .map((line: string, i: number) =>
+                            line.startsWith("> ") ? (
+                              <div
+                                key={i}
+                                className="border-l-2 border-[#696cff] pl-2 text-gray-600 italic my-1 text-[11px] bg-[#f8f9ff] p-1.5 rounded-r-md font-sans"
+                              >
+                                {line.substring(2)}
+                              </div>
+                            ) : (
+                              <p key={i}>{line}</p>
+                            )
+                          )}
+                      </div>
+
+                      {/* Nested Replies */}
+                      {replies.length > 0 && (
+                        <div className="pl-9 space-y-2 border-l-2 border-gray-100 ml-3 pt-1">
+                          {replies.map((reply: any) => (
+                            <div key={reply.id} className="bg-gray-50 p-2.5 rounded-xl text-xs space-y-1 border border-gray-100">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-bold text-gray-900">{reply.createdBy}</span>
+                                <span className="text-[10px] text-gray-400">
+                                  {new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              <p className="text-gray-700 leading-relaxed">{reply.text}</p>
                             </div>
-                          ) : (
-                            <p key={i}>{line}</p>
-                          ),
-                        )}
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Reply Toggle & Box */}
+                      <div className="pl-9 pt-1 flex items-center justify-between">
+                        <button
+                          onClick={() => setReplyingToId(isReplying ? null : comment.id)}
+                          className="text-[11px] font-bold text-[#696cff] hover:underline"
+                        >
+                          {isReplying ? "Batal Balas" : "Balas Komentar"}
+                        </button>
+                      </div>
+
+                      {isReplying && (
+                        <div className="pl-9 pt-2 space-y-2">
+                          <Textarea
+                            value={replyInput[comment.id] || ""}
+                            onChange={(e) =>
+                              setReplyInput({ ...replyInput, [comment.id]: e.target.value })
+                            }
+                            placeholder="Tulis balasan Anda..."
+                            className="text-xs min-h-[60px]"
+                          />
+                          <Button
+                            onClick={() => handleAddReply(comment.id)}
+                            size="sm"
+                            className="bg-[#696cff] text-white text-xs h-7 px-3 rounded-lg"
+                          >
+                            Kirim Balasan
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-100 bg-white">
             <Textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Select text to quote, or just comment..."
-              className="mb-2 min-h-[80px]"
+              placeholder="Pilih teks pada PRD untuk mengutip, atau ketik diskusi umum..."
+              className="mb-2 min-h-[80px] text-xs"
             />
-            <Button onClick={handleAddComment} className="w-full">
-              Send Comment
+            <Button onClick={handleAddComment} className="w-full bg-[#696cff] hover:bg-[#5a5ddb] text-white font-bold text-xs">
+              Kirim Komentar
             </Button>
           </div>
         </TabsContent>

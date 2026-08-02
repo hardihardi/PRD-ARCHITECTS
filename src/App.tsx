@@ -29,6 +29,8 @@ import { Settings } from "./pages/Settings";
 import { Profile } from "./pages/Profile";
 import { CustomTemplate } from "./pages/CustomTemplate";
 import { CustomTemplateDesign } from "./pages/CustomTemplateDesign";
+import { WebExtractor } from "./pages/WebExtractor";
+import { LibraryExtractor } from "./pages/LibraryExtractor";
 import {
   Search,
   Menu,
@@ -95,6 +97,7 @@ function AppContent() {
     if (pathName === "/generate-design") return t("sidebar.generateDesign");
     if (pathName === "/template-design") return t("sidebar.templateDesign");
     if (pathName === "/library-design") return t("sidebar.libraryDesign");
+    if (pathName === "/web-extractor") return t("sidebar.webExtractor");
     if (pathName === "/users") return t("sidebar.users");
     if (pathName === "/logs") return t("sidebar.logs");
     if (pathName === "/settings") return t("sidebar.settings");
@@ -232,6 +235,22 @@ function AppContent() {
               element={
                 <ProtectedRoute>
                   <LibraryDesign />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/web-extractor"
+              element={
+                <ProtectedRoute>
+                  <WebExtractor />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/library-extractor"
+              element={
+                <ProtectedRoute>
+                  <LibraryExtractor />
                 </ProtectedRoute>
               }
             />

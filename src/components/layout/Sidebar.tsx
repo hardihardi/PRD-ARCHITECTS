@@ -12,6 +12,8 @@ import {
   PenTool,
   Palette,
   Layers,
+  Globe,
+  History,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { Link, useLocation } from "react-router-dom";
@@ -40,6 +42,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { name: t("sidebar.generateDesign"), icon: PenTool, route: "/generate-design" },
     { name: t("sidebar.templateDesign"), icon: Palette, route: "/template-design" },
     { name: t("sidebar.libraryDesign"), icon: Layers, route: "/library-design" },
+    { name: t("sidebar.webExtractor"), icon: Globe, route: "/web-extractor" },
+    { name: t("sidebar.libraryExtractor"), icon: History, route: "/library-extractor" },
     { name: t("sidebar.users"), icon: Users, route: "/users" },
     { name: t("sidebar.logs"), icon: Activity, route: "/logs" },
     { name: t("sidebar.settings"), icon: Settings, route: "/settings" },

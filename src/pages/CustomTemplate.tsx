@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import {
   ArrowLeft,
   Sparkles,
@@ -31,6 +32,7 @@ interface CustomSection {
 
 export function CustomTemplate() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
@@ -42,8 +44,8 @@ export function CustomTemplate() {
   const [category, setCategory] = useState("SaaS");
   const [projectType, setProjectType] = useState("");
   const [industry, setIndustry] = useState("");
-  const [complexity, setComplexity] = useState("Sedang");
-  const [timeEstimation, setTimeEstimation] = useState("4-6 Minggu");
+  const [complexity, setComplexity] = useState(language === "id" ? "Sedang" : "Medium");
+  const [timeEstimation, setTimeEstimation] = useState(language === "id" ? "4-6 Minggu" : "4-6 Weeks");
   const [audience, setAudience] = useState("");
   const [techStack, setTechStack] = useState("");
   
@@ -89,165 +91,161 @@ export function CustomTemplate() {
           if (Array.isArray(data.customSections)) {
             setCustomSections(data.customSections);
           }
-        } else {
-          setError("Template tidak ditemukan.");
+          } else {
+            setError(t("customTemplate.errNotFound"));
+          }
+        } catch (err: any) {
+          console.error("Gagal memuat template kustom:", err);
+          setError(t("customTemplate.errLoad"));
         }
-      } catch (err: any) {
-        console.error("Gagal memuat template kustom:", err);
-        setError("Gagal memuat detail template untuk diedit.");
-      }
-    };
-
-    loadTemplate();
-  }, [editId]);
-
-  // AI Suggestions function
-  const handleGenerateAISuggestions = async () => {
-    if (!projectType || !industry) {
-      setError("Silakan masukkan Tipe Proyek dan Industri untuk memicu saran AI.");
-      return;
-    }
-
-    setIsAiLoading(true);
-    setError("");
-    setSuccess("");
-    try {
-      const response = await fetch("/api/v1/suggest-custom-template", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectType,
-          industry,
-          description: description || "Proyek kustom"
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Gagal memperoleh respon dari AI");
-      }
-
-      const data = await response.json();
-      
-      // Update fields
-      if (data.name) setName(data.name);
-      if (data.description) setDescription(data.description);
-      if (data.category) setCategory(data.category);
-      if (data.complexity) setComplexity(data.complexity);
-      if (data.timeEstimation) setTimeEstimation(data.timeEstimation);
-      if (data.audience) setAudience(data.audience);
-      if (data.techStack) setTechStack(data.techStack);
-      if (Array.isArray(data.features)) setFeatures(data.features);
-      if (Array.isArray(data.customSections)) {
-        setCustomSections(data.customSections);
-        setActiveSectionIdx(0);
-      }
-
-      setSuccess("Saran AI berhasil diterapkan! Anda dapat menyesuaikannya kembali.");
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Gagal membuat template kustom lewat AI.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  // Features CRUD
-  const handleAddFeature = () => {
-    if (!newFeature.trim()) return;
-    setFeatures([...features, newFeature.trim()]);
-    setNewFeature("");
-  };
-
-  const handleRemoveFeature = (idx: number) => {
-    setFeatures(features.filter((_, i) => i !== idx));
-  };
-
-  // Sections CRUD
-  const handleAddSection = () => {
-    const newSec: CustomSection = {
-      title: `## Section Baru ${customSections.length + 1}`,
-      content: "Masukkan template konten section di sini..."
-    };
-    setCustomSections([...customSections, newSec]);
-    setActiveSectionIdx(customSections.length);
-  };
-
-  const handleRemoveSection = (idx: number) => {
-    if (customSections.length <= 1) {
-      setError("Template minimal harus memiliki satu section.");
-      return;
-    }
-    const filtered = customSections.filter((_, i) => i !== idx);
-    setCustomSections(filtered);
-    setActiveSectionIdx(Math.max(0, idx - 1));
-  };
-
-  const handleSectionChange = (idx: number, field: keyof CustomSection, val: string) => {
-    const updated = [...customSections];
-    updated[idx] = {
-      ...updated[idx],
-      [field]: val
-    };
-    setCustomSections(updated);
-  };
-
-  const moveSection = (idx: number, direction: "up" | "down") => {
-    if (direction === "up" && idx === 0) return;
-    if (direction === "down" && idx === customSections.length - 1) return;
-
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    const updated = [...customSections];
-    const temp = updated[idx];
-    updated[idx] = updated[targetIdx];
-    updated[targetIdx] = temp;
-
-    setCustomSections(updated);
-    setActiveSectionIdx(targetIdx);
-  };
-
-  const handleSectionSelect = (idx: number) => {
-    setActiveSectionIdx(idx);
-    if (window.innerWidth < 768) {
-      setTimeout(() => {
-        editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
-    }
-  };
-
-  // Save/Submit Template
-  const handleSaveTemplate = async () => {
-    if (!name.trim()) {
-      setError("Nama Template wajib diisi.");
-      return;
-    }
-    if (!description.trim()) {
-      setError("Deskripsi Template wajib diisi.");
-      return;
-    }
-
-    setIsSaving(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim(),
-        category,
-        complexity,
-        timeEstimation,
-        audience,
-        techStack,
-        features,
-        customSections,
-        authorName: user?.email || "User Komunitas",
-        createdBy: user?.uid || "anonymous",
-        updatedAt: serverTimestamp(),
       };
-
-      if (editId) {
-        // Edit existing doc
-        const docRef = doc(db, "templates", editId);
+  
+      loadTemplate();
+    }, [editId, t]);
+  
+    // AI Suggestions function
+    const handleGenerateAISuggestions = async () => {
+      if (!projectType || !industry) {
+        setError(t("customTemplate.errAiInput"));
+        return;
+      }
+  
+      setIsAiLoading(true);
+      setError("");
+      setSuccess("");
+      try {
+        const response = await fetch("/api/v1/suggest-custom-template", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectType,
+            industry,
+            description: description || "Proyek kustom"
+          })
+        });
+  
+        if (!response.ok) {
+          throw new Error(t("customTemplate.errAiFail"));
+        }
+  
+        const data = await response.json();
+        
+        // Update fields
+        if (data.name) setName(data.name);
+        if (data.description) setDescription(data.description);
+        if (data.category) setCategory(data.category);
+        if (data.complexity) setComplexity(data.complexity);
+        if (data.timeEstimation) setTimeEstimation(data.timeEstimation);
+        if (data.audience) setAudience(data.audience);
+        if (data.techStack) setTechStack(data.techStack);
+        if (Array.isArray(data.features)) setFeatures(data.features);
+        if (Array.isArray(data.customSections)) {
+          setCustomSections(data.customSections);
+          setActiveSectionIdx(0);
+        }
+  
+        setSuccess(t("customTemplate.aiSuccess"));
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || t("customTemplate.errAiFail"));
+      } finally {
+        setIsAiLoading(false);
+      }
+    };
+  
+    // Features CRUD
+    const handleAddFeature = () => {
+      if (!newFeature.trim()) return;
+      setFeatures([...features, newFeature.trim()]);
+      setNewFeature("");
+    };
+  
+    const handleRemoveFeature = (idx: number) => {
+      setFeatures(features.filter((_, i) => i !== idx));
+    };
+  
+    // Sections CRUD
+    const handleAddSection = () => {
+      const newSec: CustomSection = {
+        title: `## ${t("customTemplate.newSectionDefault").replace("{num}", String(customSections.length + 1))}`,
+        content: t("customTemplate.sectionContentDefault")
+      };
+      setCustomSections([...customSections, newSec]);
+      setActiveSectionIdx(customSections.length);
+    };
+  
+    const handleRemoveSection = (idx: number) => {
+      if (customSections.length <= 1) {
+        setError(t("customTemplate.errMinSection"));
+        return;
+      }
+      const filtered = customSections.filter((_, i) => i !== idx);
+      setCustomSections(filtered);
+      setActiveSectionIdx(Math.max(0, idx - 1));
+    };
+  
+    const handleSectionChange = (idx: number, field: keyof CustomSection, val: string) => {
+      const updated = [...customSections];
+      updated[idx] = {
+        ...updated[idx],
+        [field]: val
+      };
+      setCustomSections(updated);
+    };
+  
+    const moveSection = (idx: number, direction: "up" | "down") => {
+      if (direction === "up" && idx === 0) return;
+      if (direction === "down" && idx === customSections.length - 1) return;
+  
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      const updated = [...customSections];
+      const temp = updated[idx];
+      updated[idx] = updated[targetIdx];
+      updated[targetIdx] = temp;
+  
+      setCustomSections(updated);
+      setActiveSectionIdx(targetIdx);
+    };
+  
+    const handleSectionSelect = (idx: number) => {
+      setActiveSectionIdx(idx);
+      if (window.innerWidth < 768) {
+        setTimeout(() => {
+          editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
+    };
+  
+    // Save/Submit Template
+    const handleSaveTemplate = async () => {
+      if (!name.trim() || !description.trim()) {
+        setError(t("customTemplate.errReqFields"));
+        return;
+      }
+  
+      setIsSaving(true);
+      setError("");
+      setSuccess("");
+  
+      try {
+        const payload = {
+          name: name.trim(),
+          description: description.trim(),
+          category,
+          complexity,
+          timeEstimation,
+          audience,
+          techStack,
+          features,
+          customSections,
+          authorName: user?.email || "User Komunitas",
+          createdBy: user?.uid || "anonymous",
+          updatedAt: serverTimestamp(),
+        };
+  
+        if (editId) {
+          // Edit existing doc
+          const docRef = doc(db, "templates", editId);
         await updateDoc(docRef, payload);
         setSuccess("Template kustom berhasil diperbarui!");
       } else {
@@ -261,7 +259,7 @@ export function CustomTemplate() {
           isFeatured: false,
           isCommunity: true
         });
-        setSuccess("Template kustom berhasil dibuat & disimpan ke katalog!");
+        setSuccess(t("customTemplate.saveSuccess"));
       }
 
       setTimeout(() => {
@@ -269,7 +267,7 @@ export function CustomTemplate() {
       }, 1500);
     } catch (err: any) {
       console.error(err);
-      setError("Gagal menyimpan template: " + (err.message || "Internal error"));
+      setError(t("customTemplate.errSave") + " " + (err.message || "Internal error"));
     } finally {
       setIsSaving(false);
     }
@@ -285,14 +283,14 @@ export function CustomTemplate() {
             className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 mb-2"
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Kembali ke Katalog
+            {t("common.back")}
           </Link>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
             <LayoutTemplate className="h-8 w-8 text-indigo-600" />
-            {editId ? "Edit Template Kustom" : "Buat Template PRD Kustom AI"}
+            {editId ? t("customTemplate.editTitle") : t("customTemplate.title")}
           </h1>
           <p className="mt-1 text-sm text-gray-500 max-w-2xl">
-            Rancang template PRD Anda sendiri. Gunakan AI untuk mendapatkan saran instan, atau buat secara manual sesuai kebutuhan tim dan industri Anda.
+            {editId ? t("customTemplate.editSubtitle") : t("customTemplate.subtitle")}
           </p>
         </div>
       </div>
@@ -317,16 +315,20 @@ export function CustomTemplate() {
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
               <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
-              Saran AI Generator
+              {t("customTemplate.aiTitle")}
             </h2>
+            
+            <p className="text-sm text-gray-500 leading-relaxed">
+              {t("customTemplate.aiDesc")}
+            </p>
 
-            <div className="space-y-4">
+            <div className="space-y-4 mt-2">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Tipe Proyek <span className="text-red-500">*</span>
+                  {t("customTemplate.typeLabel")} <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  placeholder="Misal: Mobile App Delivery, AI Workspace"
+                  placeholder={t("customTemplate.typePlaceholder")}
                   value={projectType}
                   onChange={(e) => setProjectType(e.target.value)}
                 />
@@ -334,10 +336,10 @@ export function CustomTemplate() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Industri / Domain <span className="text-red-500">*</span>
+                  {t("customTemplate.industryLabel")} <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  placeholder="Misal: Logistics, FinTech, EdTech"
+                  placeholder={t("customTemplate.industryPlaceholder")}
                   value={industry}
                   onChange={(e) => setIndustry(e.target.value)}
                 />
@@ -351,12 +353,12 @@ export function CustomTemplate() {
                 {isAiLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Membuat Template...
+                    {t("common.loading")}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    Saran Template dengan AI
+                    {t("customTemplate.aiBtn")}
                   </>
                 )}
               </Button>
@@ -366,16 +368,19 @@ export function CustomTemplate() {
           {/* Core Metadata */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
             <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
-              Metadata Template
+              {t("customTemplate.genTitle")}
             </h2>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              {t("customTemplate.genDesc")}
+            </p>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Nama Template <span className="text-red-500">*</span>
+                  {t("customTemplate.nameLabel")}
                 </label>
                 <Input
-                  placeholder="Nama Template PRD"
+                  placeholder={t("customTemplate.namePlaceholder")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -383,10 +388,10 @@ export function CustomTemplate() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                  Deskripsi <span className="text-red-500">*</span>
+                  {t("customTemplate.descLabel")}
                 </label>
                 <Textarea
-                  placeholder="Deskripsi singkat template..."
+                  placeholder={t("customTemplate.descPlaceholder")}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="min-h-[80px]"
@@ -396,7 +401,7 @@ export function CustomTemplate() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Kategori
+                    {t("customTemplate.categoryLabel")}
                   </label>
                   <select
                     value={category}
@@ -411,23 +416,22 @@ export function CustomTemplate() {
                     <option value="Logistics & Supply Chain">Logistics</option>
                     <option value="On-Demand & Mobility">On-Demand</option>
                     <option value="AI & Productivity">AI Tools</option>
-                    <option value="Community">Umum/Lainnya</option>
+                    <option value="Community">Community</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Kompleksitas
+                    {t("customTemplate.complexityLabel")}
                   </label>
                   <select
                     value={complexity}
                     onChange={(e) => setComplexity(e.target.value)}
                     className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="Rendah">Rendah</option>
-                    <option value="Sedang">Sedang</option>
-                    <option value="Tinggi">Tinggi</option>
-                    <option value="Sangat Tinggi">Sangat Tinggi</option>
+                    <option value={t("customTemplate.complexityLow")}>{t("customTemplate.complexityLow")}</option>
+                    <option value={t("customTemplate.complexityMedium")}>{t("customTemplate.complexityMedium")}</option>
+                    <option value={t("customTemplate.complexityHigh")}>{t("customTemplate.complexityHigh")}</option>
                   </select>
                 </div>
               </div>
@@ -435,20 +439,20 @@ export function CustomTemplate() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Estimasi Waktu
+                    {t("customTemplate.timeLabel")}
                   </label>
                   <Input
-                    placeholder="Misal: 4-6 Minggu"
+                    placeholder={t("customTemplate.timePlaceholder")}
                     value={timeEstimation}
                     onChange={(e) => setTimeEstimation(e.target.value)}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                    Target Audiens
+                    {t("customTemplate.audienceLabel")}
                   </label>
                   <Input
-                    placeholder="Misal: Driver / Pengguna"
+                    placeholder={t("customTemplate.audiencePlaceholder")}
                     value={audience}
                     onChange={(e) => setAudience(e.target.value)}
                   />
@@ -474,19 +478,19 @@ export function CustomTemplate() {
           {/* Features Checklist */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
-              Fitur Utama yang Direkomendasikan
+              {t("customTemplate.featTitle")}
             </h2>
 
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
-                placeholder="Tambahkan fitur utama baru..."
+                placeholder={t("customTemplate.featInputPlaceholder")}
                 value={newFeature}
                 onChange={(e) => setNewFeature(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddFeature()}
                 className="flex-1"
               />
               <Button onClick={handleAddFeature} variant="outline" className="shrink-0 gap-1 sm:w-auto w-full justify-center">
-                <Plus className="w-4 h-4" /> Tambah
+                <Plus className="w-4 h-4" /> {t("customTemplate.featAddBtn")}
               </Button>
             </div>
 
@@ -516,12 +520,12 @@ export function CustomTemplate() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
-                  Blok Section Template
+                  {t("customTemplate.secTitle")}
                 </h2>
-                <p className="text-xs text-gray-400">Rancang judul section dan placeholder isian markdown di bawah.</p>
+                <p className="text-xs text-gray-400">{t("customTemplate.secDesc")}</p>
               </div>
               <Button onClick={handleAddSection} size="sm" className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 gap-1.5 justify-center sm:w-auto w-full">
-                <Plus className="w-4 h-4" /> Tambah Section
+                <Plus className="w-4 h-4" /> {t("customTemplate.secAddBtn")}
               </Button>
             </div>
 
@@ -629,7 +633,7 @@ export function CustomTemplate() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Judul Section (Heading Markdown)
+                        {t("customTemplate.secNameLabel")}
                       </label>
                       <Input
                         value={customSections[activeSectionIdx].title}
@@ -640,12 +644,12 @@ export function CustomTemplate() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Placeholder / Panduan Isian (Rich Markdown)
+                        {t("customTemplate.secContentLabel")}
                       </label>
                       <Textarea
                         value={customSections[activeSectionIdx].content}
                         onChange={(e) => handleSectionChange(activeSectionIdx, "content", e.target.value)}
-                        placeholder="Uraikan format atau panduan isian untuk bagian ini..."
+                        placeholder={t("customTemplate.secContentPlaceholder")}
                         className="min-h-[220px] md:min-h-[280px] font-mono text-sm leading-relaxed"
                       />
                     </div>
@@ -662,7 +666,7 @@ export function CustomTemplate() {
           {/* Action Footer */}
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 sm:space-y-0 space-y-2">
             <Link to="/templates" className="w-full sm:w-auto">
-              <Button variant="outline" className="w-full justify-center">Batal</Button>
+              <Button variant="outline" className="w-full justify-center">{t("common.cancel")}</Button>
             </Link>
             <Button
               onClick={handleSaveTemplate}
@@ -672,12 +676,12 @@ export function CustomTemplate() {
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Menyimpan...
+                  {t("common.loading")}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  {editId ? "Perbarui Template" : "Simpan & Daftarkan Template"}
+                  {editId ? t("customTemplate.updateBtn") : t("customTemplate.saveDraftBtn")}
                 </>
               )}
             </Button>

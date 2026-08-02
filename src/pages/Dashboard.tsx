@@ -144,13 +144,13 @@ export function Dashboard() {
   return (
     <div className="w-full space-y-6 text-[#566a7f]">
       {/* Signature Welcome Hero Banner Card */}
-      <div className="relative overflow-hidden rounded-xl bg-white p-6 sm:p-8 border border-[#e4e6e8] shadow-[0_2px_6px_0_rgba(67,89,113,0.12)] flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-2 z-10 max-w-xl">
+      <div className="relative overflow-hidden rounded-xl bg-white p-6 sm:p-8 border border-[#e4e6e8] shadow-[0_2px_6px_0_rgba(67,89,113,0.12)] flex flex-col md:flex-row items-start justify-between gap-6">
+        <div className="space-y-3 z-10 max-w-xl text-left flex-1">
           <div className="inline-flex items-center gap-1.5 bg-[#e7e7ff] text-[#696cff] px-3 py-1 rounded-full text-xs font-bold">
             <span>{t("dashboard.welcomeTitle")}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#384756] tracking-tight">
-            {t("dashboard.title")} ({settings.appName || "PRD Architect"})
+            {t("dashboard.title")}
           </h1>
           <p className="text-xs sm:text-sm text-[#7a838b] leading-relaxed">
             {t("dashboard.subtitlePre")}{" "}
@@ -159,7 +159,7 @@ export function Dashboard() {
             </span>{" "}
             {t("dashboard.subtitlePost")}
           </p>
-          <div className="pt-2 flex flex-wrap items-center gap-3">
+          <div className="pt-2 flex flex-wrap items-center justify-start gap-3">
             <Link
               to="/generate"
               className="px-4 py-2.5 bg-[#696cff] hover:bg-[#5a5ddb] text-white text-xs font-bold rounded-lg shadow-[0_2px_4px_0_rgba(105,108,255,0.4)] transition-all active:scale-98"
@@ -172,10 +172,29 @@ export function Dashboard() {
             >
               {t("dashboard.browseTemplates")}
             </Link>
+            <Link
+              to="/web-extractor"
+              className="px-4 py-2.5 bg-[#f5f5f9] hover:bg-[#e4e6e8] text-[#384756] text-xs font-bold rounded-lg border border-[#e4e6e8] transition-all"
+            >
+              🌐 Web Extractor Suite
+            </Link>
           </div>
         </div>
 
-
+        {/* Decorative graphic for the right side */}
+        <div className="hidden md:flex items-center justify-center relative w-48 h-32 md:w-64 md:h-40 shrink-0">
+          <div className="absolute inset-0 bg-[#e7e7ff] rounded-2xl transform rotate-3 opacity-50 transition-transform hover:rotate-6 duration-300"></div>
+          <div className="absolute inset-0 bg-indigo-50 rounded-2xl transform -rotate-3 opacity-50 transition-transform hover:-rotate-6 duration-300"></div>
+          <div className="relative bg-white p-5 rounded-xl shadow-sm border border-[#e7e7ff] w-full h-full flex flex-col justify-center items-center gap-3">
+            <div className="w-12 h-12 bg-[#e7e7ff] rounded-full flex items-center justify-center">
+              <FileText className="h-6 w-6 text-[#696cff]" />
+            </div>
+            <div className="w-full space-y-2 px-2">
+              <div className="h-2 w-3/4 bg-gray-100 rounded-full mx-auto"></div>
+              <div className="h-2 w-1/2 bg-gray-100 rounded-full mx-auto"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid - Sneat Styled */}
@@ -391,24 +410,26 @@ export function Dashboard() {
       </div>
 
       {/* Start New Project Quick Action Container */}
-      <div className="rounded-xl border border-[#e4e6e8] bg-white p-8 sm:p-10 text-center shadow-[0_2px_6px_0_rgba(67,89,113,0.12)]">
-        <div className="w-14 h-14 rounded-2xl bg-[#e7e7ff] text-[#696cff] flex items-center justify-center mx-auto mb-4">
-          <FileText className="h-7 w-7" />
+      <div className="rounded-xl border border-[#e4e6e8] bg-white p-6 sm:p-8 shadow-[0_2px_6px_0_rgba(67,89,113,0.12)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-left">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#e7e7ff] text-[#696cff] flex items-center justify-center shrink-0">
+            <FileText className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base sm:text-lg font-bold text-[#384756]">
+              {t("dashboard.startWizardTitle")}
+            </h3>
+            <p className="text-xs sm:text-sm text-[#7a838b] max-w-xl leading-relaxed">
+              {t("dashboard.startWizardDesc")}
+            </p>
+          </div>
         </div>
-        <h3 className="text-lg font-bold text-[#384756]">
-          {t("dashboard.startWizardTitle")}
-        </h3>
-        <p className="mt-2 text-xs sm:text-sm text-[#7a838b] max-w-xl mx-auto leading-relaxed">
-          {t("dashboard.startWizardDesc")}
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/generate"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#696cff] hover:bg-[#5a5ddb] px-5 py-2.5 text-xs font-bold text-white shadow-[0_2px_4px_0_rgba(105,108,255,0.4)] transition-all active:scale-98"
-          >
-            <span>{t("dashboard.openWizardBtn")}</span>
-          </Link>
-        </div>
+        <Link
+          to="/generate"
+          className="inline-flex items-center gap-2 rounded-lg bg-[#696cff] hover:bg-[#5a5ddb] px-5 py-2.5 text-xs font-bold text-white shadow-[0_2px_4px_0_rgba(105,108,255,0.4)] transition-all active:scale-98 shrink-0 w-full sm:w-auto justify-center"
+        >
+          <span>{t("dashboard.openWizardBtn")}</span>
+        </Link>
       </div>
     </div>
   );
